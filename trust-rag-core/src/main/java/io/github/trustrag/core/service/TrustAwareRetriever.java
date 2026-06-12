@@ -47,16 +47,30 @@ public final class TrustAwareRetriever {
 
     public RetrievalResult retrieve(RagRequest request, ScopeContext scope, List<String> queries) {
         try {
-            int finalTopK = request.topK() == null ? options.highTrustTopK() + options.lowTrustTopK() : request.topK();
+            int finalTopK = request.topK() == null
+                    ? options.highTrustTopK() + options.mediumTrustTopK() + options.lowTrustTopK()
+                    : request.topK();
             double minScore = request.minScore() == null ? options.minVectorScore() : request.minScore();
             Map<Long, Double> scores = new LinkedHashMap<>();
 
             for (String query : queries) {
                 List<Float> vector = embeddingClient.embed(query);
                 validateDimension(vector);
-                merge(scores, searchLayer(vector, scope, Set.of(TrustLevel.HIGH), options.highTrustTopK(), minScore));
+                merge(scores, searchLayer(
+                        vector, scope, Set.of(TrustLevel.HIGH),
+                        Set.of(KnowledgeStatus.HIGH_ENABLED),
+                        options.highTrustTopK(), minScore, false));
+                if (options.mediumTrustTopK() > 0) {
+                    merge(scores, searchLayer(
+                            vector, scope, Set.of(TrustLevel.MEDIUM),
+                            Set.of(KnowledgeStatus.MEDIUM_ENABLED, KnowledgeStatus.HUMAN_REVIEW_PENDING),
+                            options.mediumTrustTopK(), minScore, false));
+                }
                 if (options.lowTrustTopK() > 0) {
-                    merge(scores, searchLayer(vector, scope, Set.of(TrustLevel.LOW), options.lowTrustTopK(), minScore));
+                    merge(scores, searchLayer(
+                            vector, scope, Set.of(TrustLevel.LOW),
+                            Set.of(KnowledgeStatus.LOW_ENABLED),
+                            options.lowTrustTopK(), minScore, options.allowGlobalLowCandidate()));
                 }
             }
 
@@ -69,8 +83,8 @@ public final class TrustAwareRetriever {
             for (Map.Entry<Long, Double> entry : scores.entrySet()) {
                 KnowledgeItem item = items.get(entry.getKey());
                 if (item == null
-                        || item.status() != KnowledgeStatus.ENABLED
-                        || !visibilityPolicy.isVisible(item, scope)) {
+                        || !item.status().isRetrievable()
+                        || !visibilityPolicy.isVisible(item, scope, options.allowGlobalLowCandidate())) {
                     continue;
                 }
                 double trustScore = trustScore(item);
@@ -95,13 +109,15 @@ public final class TrustAwareRetriever {
             List<Float> vector,
             ScopeContext scope,
             Set<TrustLevel> trustLevels,
+            Set<KnowledgeStatus> statuses,
             int topK,
-            double minScore) {
+            double minScore,
+            boolean allowGlobalCandidate) {
         if (topK == 0) {
             return List.of();
         }
         return vectorStore.search(new VectorSearchRequest(
-                vector, scope, trustLevels, Set.of(KnowledgeStatus.ENABLED), topK, minScore));
+                vector, scope, trustLevels, statuses, topK, minScore, allowGlobalCandidate));
     }
 
     private void merge(Map<Long, Double> scores, List<VectorHit> hits) {
@@ -123,12 +139,16 @@ public final class TrustAwareRetriever {
         if (item.trustLevel() == TrustLevel.HIGH) {
             return options.highTrustWeight();
         }
+        if (item.trustLevel() == TrustLevel.MEDIUM) {
+            return options.mediumTrustWeight();
+        }
         return switch (item.scopeType()) {
             case CONVERSATION -> options.lowConversationWeight();
             case USER -> options.lowUserWeight();
             case PROJECT -> options.lowProjectWeight();
             case TENANT -> options.lowTenantWeight();
-            case GLOBAL, GLOBAL_CANDIDATE -> 0.0;
+            case GLOBAL -> 0.0;
+            case GLOBAL_CANDIDATE -> options.lowGlobalCandidateWeight();
         };
     }
 

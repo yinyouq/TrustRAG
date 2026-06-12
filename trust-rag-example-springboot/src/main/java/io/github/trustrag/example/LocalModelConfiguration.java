@@ -1,12 +1,12 @@
 package io.github.trustrag.example;
 
 import io.github.trustrag.core.model.KnowledgeItem;
+import io.github.trustrag.core.model.LlmResponse;
 import io.github.trustrag.core.model.ScopeContext;
 import io.github.trustrag.core.model.TokenUsage;
 import io.github.trustrag.core.model.TrustLevel;
 import io.github.trustrag.core.model.VectorHit;
 import io.github.trustrag.core.model.VectorSearchRequest;
-import io.github.trustrag.core.model.LlmResponse;
 import io.github.trustrag.core.service.KnowledgeVisibilityPolicy;
 import io.github.trustrag.core.spi.EmbeddingClient;
 import io.github.trustrag.core.spi.KnowledgeVectorStore;
@@ -36,15 +36,32 @@ public class LocalModelConfiguration {
     @Bean
     LlmClient localLlmClient() {
         return prompt -> {
-            int start = prompt.indexOf("<knowledge>");
+            if (prompt.contains("conservative pre-reviewer")) {
+                return new LlmResponse("""
+                        {"qualityScore":0.95,"generalValueScore":0.90,
+                        "evidenceSufficiencyScore":0.80,"riskScore":0.05,
+                        "suggestedAction":"PROMOTE_TO_MEDIUM",
+                        "reason":"Deterministic demo pre-review passed",
+                        "normalizedClaim":"Spring AI supports dynamic ToolCallback registration",
+                        "tags":["spring-ai","tool-callback"]}
+                        """, 0.95, new TokenUsage(0, 0));
+            }
+            if (prompt.contains("Compare two knowledge claims")) {
+                return new LlmResponse("""
+                        {"type":"UNRELATED","confidence":0.20,
+                        "reason":"No deterministic conflict in demo mode"}
+                        """, 0.80, new TokenUsage(0, 0));
+            }
+            int start = prompt.lastIndexOf("<knowledge>");
             int end = prompt.indexOf("</knowledge>");
             String context = start >= 0 && end > start
                     ? prompt.substring(start + "<knowledge>".length(), end).trim()
                     : "";
             String answer = context.isBlank()
-                    ? "资料不足，无法确定。"
-                    : "根据已检索到的知识：\n" + context;
-            return new LlmResponse(answer, context.isBlank() ? 0.1 : 0.85, new TokenUsage(0, 0));
+                    ? "Insufficient information."
+                    : "Answer based on retrieved trusted knowledge:\n" + context;
+            return new LlmResponse(
+                    answer, context.isBlank() ? 0.1 : 0.85, new TokenUsage(0, 0));
         };
     }
 
@@ -127,9 +144,12 @@ public class LocalModelConfiguration {
                     .filter(entry -> request.statuses().contains(entry.knowledge().status()))
                     .filter(entry -> request.trustLevels().contains(entry.knowledge().trustLevel()))
                     .filter(entry -> entry.knowledge().trustLevel() != TrustLevel.LOW
-                            || entry.knowledge().scopeType() != io.github.trustrag.core.model.ScopeType.GLOBAL)
-                    .filter(entry -> visibilityPolicy.isVisible(entry.knowledge(), scope))
-                    .map(entry -> new VectorHit(entry.knowledge().id(), cosine(request.vector(), entry.vector())))
+                            || entry.knowledge().scopeType()
+                            != io.github.trustrag.core.model.ScopeType.GLOBAL)
+                    .filter(entry -> visibilityPolicy.isVisible(
+                            entry.knowledge(), scope, request.allowGlobalCandidate()))
+                    .map(entry -> new VectorHit(
+                            entry.knowledge().id(), cosine(request.vector(), entry.vector())))
                     .filter(hit -> hit.vectorScore() >= request.minScore())
                     .sorted(Comparator.comparingDouble(VectorHit::vectorScore).reversed())
                     .limit(request.topK())
@@ -145,7 +165,9 @@ public class LocalModelConfiguration {
                 leftNorm += left.get(index) * left.get(index);
                 rightNorm += right.get(index) * right.get(index);
             }
-            return leftNorm == 0.0 || rightNorm == 0.0 ? 0.0 : dot / Math.sqrt(leftNorm * rightNorm);
+            return leftNorm == 0.0 || rightNorm == 0.0
+                    ? 0.0
+                    : dot / Math.sqrt(leftNorm * rightNorm);
         }
 
         private record Entry(KnowledgeItem knowledge, List<Float> vector) {

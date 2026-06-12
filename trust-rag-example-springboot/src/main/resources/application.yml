@@ -27,8 +27,13 @@ trust-rag:
     dimension: 64
   retrieval:
     high-trust-top-k: 5
+    medium-trust-top-k: 3
     low-trust-top-k: 3
     min-vector-score: 0.10
+  promotion:
+    min-promotion-score: 0.55
+    min-source-score: 0.60
+    min-evidence-score: 0.50
   trace:
     save-prompt: false
   admin-api:

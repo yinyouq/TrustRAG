@@ -2,8 +2,13 @@ package io.github.trustrag.admin;
 
 import io.github.trustrag.core.service.CandidateKnowledgeService;
 import io.github.trustrag.core.service.KnowledgeIngestionService;
+import io.github.trustrag.core.service.KnowledgePromotionWorker;
 import io.github.trustrag.core.service.KnowledgeReviewService;
+import io.github.trustrag.core.service.PromotionTaskService;
 import io.github.trustrag.core.service.TrustRagFeedbackService;
+import io.github.trustrag.core.spi.ConflictRecordRepository;
+import io.github.trustrag.core.spi.KnowledgeLifecycleManager;
+import io.github.trustrag.core.spi.KnowledgeRepository;
 import io.github.trustrag.core.spi.PrivacyFilter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -31,6 +36,24 @@ public class TrustRagAdminAutoConfiguration {
             PrivacyFilter privacyFilter) {
         return new TrustRagKnowledgeController(
                 reviewService, ingestionService, candidateService, privacyFilter);
+    }
+
+    @Bean
+    @ConditionalOnBean({
+            PromotionTaskService.class,
+            KnowledgePromotionWorker.class,
+            ConflictRecordRepository.class,
+            KnowledgeRepository.class,
+            KnowledgeLifecycleManager.class})
+    TrustRagGovernanceController trustRagGovernanceController(
+            PromotionTaskService taskService,
+            KnowledgePromotionWorker worker,
+            ConflictRecordRepository conflictRepository,
+            KnowledgeRepository knowledgeRepository,
+            KnowledgeLifecycleManager lifecycleManager) {
+        return new TrustRagGovernanceController(
+                taskService, worker, conflictRepository,
+                knowledgeRepository, lifecycleManager);
     }
 
     @Bean

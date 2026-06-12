@@ -10,14 +10,19 @@ import io.github.trustrag.core.model.KnowledgeStatus;
 import io.github.trustrag.core.model.ScopeContext;
 import io.github.trustrag.core.model.ScopeType;
 import io.github.trustrag.core.model.TrustLevel;
+import io.github.trustrag.core.model.ReviewTask;
+import io.github.trustrag.core.config.LifecycleOptions;
 import io.github.trustrag.core.spi.ChunkStrategy;
 import io.github.trustrag.core.spi.EmbeddingClient;
 import io.github.trustrag.core.spi.KnowledgeRepository;
 import io.github.trustrag.core.spi.KnowledgeVectorStore;
+import io.github.trustrag.core.spi.ReviewTaskRepository;
+import io.github.trustrag.core.spi.TransactionRunner;
 import io.github.trustrag.core.util.KnowledgeHashes;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,6 +33,9 @@ public final class KnowledgeIngestionService {
     private final KnowledgeVectorStore vectorStore;
     private final KnowledgeRepository knowledgeRepository;
     private final KnowledgeVisibilityPolicy visibilityPolicy;
+    private final ReviewTaskRepository reviewTaskRepository;
+    private final TransactionRunner transactionRunner;
+    private final LifecycleOptions lifecycleOptions;
     private final Clock clock;
 
     public KnowledgeIngestionService(
@@ -36,12 +44,18 @@ public final class KnowledgeIngestionService {
             KnowledgeVectorStore vectorStore,
             KnowledgeRepository knowledgeRepository,
             KnowledgeVisibilityPolicy visibilityPolicy,
+            ReviewTaskRepository reviewTaskRepository,
+            TransactionRunner transactionRunner,
+            LifecycleOptions lifecycleOptions,
             Clock clock) {
         this.chunkStrategy = chunkStrategy;
         this.embeddingClient = embeddingClient;
         this.vectorStore = vectorStore;
         this.knowledgeRepository = knowledgeRepository;
         this.visibilityPolicy = visibilityPolicy;
+        this.reviewTaskRepository = reviewTaskRepository;
+        this.transactionRunner = transactionRunner;
+        this.lifecycleOptions = lifecycleOptions;
         this.clock = clock;
     }
 
@@ -74,7 +88,7 @@ public final class KnowledgeIngestionService {
                     request.userId(), request.conversationId(), request.projectId(), request.tenantId(),
                     request.sourceType(), request.sourceRef(), request.sourceRef(),
                     null, null, null, 1.0, 0.0, 1, hash,
-                    null, null, null, now, now, null);
+                    null, null, null, now, now, expiry(trustLevel, now));
             visibilityPolicy.validateOwnership(item);
 
             KnowledgeItem saved;
@@ -105,13 +119,19 @@ public final class KnowledgeIngestionService {
                 throw new TrustRagException("Embedding dimension mismatch while indexing knowledge " + item.id());
             }
             KnowledgeItem enabled = item.withIndexState(
-                    KnowledgeStatus.ENABLED,
+                    enabledStatus(item.trustLevel()),
                     Long.toString(item.id()),
                     embeddingClient.modelName(),
                     embeddingClient.dimension(),
                     clock.instant());
             vectorStore.upsert(enabled, vector);
-            knowledgeRepository.update(enabled);
+            transactionRunner.required(() -> {
+                knowledgeRepository.update(enabled);
+                if (enabled.status() == KnowledgeStatus.HUMAN_REVIEW_PENDING
+                        && reviewTaskRepository.findPendingByKnowledgeId(enabled.id()).isEmpty()) {
+                    reviewTaskRepository.save(ReviewTask.pending(enabled.id(), clock.instant()));
+                }
+            });
             return enabled;
         } catch (Exception exception) {
             KnowledgeItem failed = item.withIndexState(
@@ -140,5 +160,21 @@ public final class KnowledgeIngestionService {
 
     private ScopeType defaultScope(ScopeType value) {
         return value == null ? ScopeType.GLOBAL : value;
+    }
+
+    private KnowledgeStatus enabledStatus(TrustLevel trustLevel) {
+        return switch (trustLevel) {
+            case HIGH -> KnowledgeStatus.HIGH_ENABLED;
+            case MEDIUM -> KnowledgeStatus.HUMAN_REVIEW_PENDING;
+            case LOW -> KnowledgeStatus.LOW_ENABLED;
+        };
+    }
+
+    private Instant expiry(TrustLevel trustLevel, Instant now) {
+        return switch (trustLevel) {
+            case HIGH -> null;
+            case MEDIUM -> now.plus(lifecycleOptions.mediumTtlDays(), ChronoUnit.DAYS);
+            case LOW -> now.plus(lifecycleOptions.lowTtlDays(), ChronoUnit.DAYS);
+        };
     }
 }

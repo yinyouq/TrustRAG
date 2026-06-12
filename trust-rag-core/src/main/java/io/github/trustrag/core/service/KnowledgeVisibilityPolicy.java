@@ -8,9 +8,14 @@ import java.util.Objects;
 public final class KnowledgeVisibilityPolicy {
 
     public boolean isVisible(KnowledgeItem item, ScopeContext scope) {
+        return isVisible(item, scope, false);
+    }
+
+    public boolean isVisible(KnowledgeItem item, ScopeContext scope, boolean allowGlobalCandidate) {
         return switch (item.scopeType()) {
             case GLOBAL -> item.trustLevel() != io.github.trustrag.core.model.TrustLevel.LOW;
-            case GLOBAL_CANDIDATE -> false;
+            case GLOBAL_CANDIDATE -> allowGlobalCandidate
+                    && item.trustLevel() == io.github.trustrag.core.model.TrustLevel.LOW;
             case TENANT -> sameNonBlank(item.tenantId(), scope.tenantId());
             case PROJECT -> sameNonBlank(item.projectId(), scope.projectId());
             case USER -> sameNonBlank(item.userId(), scope.userId());

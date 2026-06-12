@@ -27,7 +27,7 @@ public final class DefaultCandidateExtractor implements CandidateExtractor {
                 request.traceId(),
                 scopeType,
                 TrustLevel.LOW,
-                KnowledgeStatus.PENDING_REVIEW,
+                KnowledgeStatus.LOW_PENDING,
                 0.70,
                 List.of("user-correction"));
     }

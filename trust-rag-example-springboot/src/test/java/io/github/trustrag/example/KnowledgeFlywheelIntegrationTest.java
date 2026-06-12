@@ -7,9 +7,11 @@ import io.github.trustrag.core.model.RagRequest;
 import io.github.trustrag.core.model.ReviewRequest;
 import io.github.trustrag.core.model.ScopeType;
 import io.github.trustrag.core.model.TrustLevel;
+import io.github.trustrag.core.service.KnowledgePromotionWorker;
 import io.github.trustrag.core.service.KnowledgeReviewService;
 import io.github.trustrag.core.service.TrustRagEngine;
 import io.github.trustrag.core.service.TrustRagFeedbackService;
+import io.github.trustrag.core.spi.KnowledgeRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -36,12 +38,18 @@ class KnowledgeFlywheelIntegrationTest {
     private KnowledgeReviewService reviewService;
 
     @Autowired
+    private KnowledgePromotionWorker promotionWorker;
+
+    @Autowired
+    private KnowledgeRepository knowledgeRepository;
+
+    @Autowired
     private MockMvc mockMvc;
 
     @Test
-    void correctionCanBeReviewedAndRecalledAsHighTrustKnowledge() {
+    void correctionMovesThroughLowMediumAndHighPools() {
         var initial = engine.ask(RagRequest.builder()
-                .question("Spring AI 能不能动态注册工具？")
+                .question("Can Spring AI register tools dynamically?")
                 .userId("user-1")
                 .conversationId("conversation-1")
                 .build());
@@ -49,27 +57,35 @@ class KnowledgeFlywheelIntegrationTest {
         var candidate = feedbackService.submitFeedback(new RagFeedbackRequest(
                         initial.traceId(),
                         FeedbackType.CORRECTION,
-                        "用户确认该能力存在",
-                        "Spring AI 可以通过 ToolCallback 动态注册工具。",
+                        "Confirmed by the application integration test.",
+                        "Spring AI can register tools dynamically through ToolCallback.",
                         "user-1",
                         "conversation-1",
                         null,
                         null))
                 .orElseThrow();
 
-        assertThat(candidate.status()).isEqualTo(KnowledgeStatus.PENDING_REVIEW);
+        assertThat(candidate.status()).isEqualTo(KnowledgeStatus.LOW_PENDING);
         assertThat(candidate.trustLevel()).isEqualTo(TrustLevel.LOW);
         assertThat(candidate.scopeType()).isEqualTo(ScopeType.GLOBAL_CANDIDATE);
+        assertThat(candidate.expiresAt()).isNotNull();
 
-        var approved = reviewService.approve(candidate.id(), new ReviewRequest(
+        promotionWorker.runBatch(10);
+        var medium = knowledgeRepository.findById(candidate.id()).orElseThrow();
+        assertThat(medium.status()).isEqualTo(KnowledgeStatus.HUMAN_REVIEW_PENDING);
+        assertThat(medium.trustLevel()).isEqualTo(TrustLevel.MEDIUM);
+        assertThat(medium.expiresAt()).isAfter(candidate.expiresAt());
+
+        var approved = reviewService.approve(medium.id(), new ReviewRequest(
                 "admin", "verified", null, null));
 
-        assertThat(approved.status()).isEqualTo(KnowledgeStatus.ENABLED);
+        assertThat(approved.status()).isEqualTo(KnowledgeStatus.HIGH_ENABLED);
         assertThat(approved.trustLevel()).isEqualTo(TrustLevel.HIGH);
         assertThat(approved.scopeType()).isEqualTo(ScopeType.GLOBAL);
+        assertThat(approved.expiresAt()).isNull();
 
         var evolved = engine.ask(RagRequest.builder()
-                .question("Spring AI 可以通过 ToolCallback 动态注册工具吗？")
+                .question("Can Spring AI use ToolCallback to register tools dynamically?")
                 .userId("another-user")
                 .build());
 
@@ -81,8 +97,8 @@ class KnowledgeFlywheelIntegrationTest {
     @Test
     void adminApiIsAutoConfigured() throws Exception {
         mockMvc.perform(get("/trust-rag/admin/knowledge/candidates")
-                        .queryParam("status", "PENDING_REVIEW")
-                        .queryParam("trustLevel", "LOW"))
+                        .queryParam("status", "HUMAN_REVIEW_PENDING")
+                        .queryParam("trustLevel", "MEDIUM"))
                 .andExpect(status().isOk());
     }
 }

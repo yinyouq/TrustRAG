@@ -4,6 +4,7 @@ import io.github.trustrag.core.exception.InvalidKnowledgeStateException;
 import io.github.trustrag.core.exception.KnowledgeNotFoundException;
 import io.github.trustrag.core.exception.TrustRagException;
 import io.github.trustrag.core.model.KnowledgeItem;
+import io.github.trustrag.core.model.KnowledgeLineage;
 import io.github.trustrag.core.model.KnowledgeStatus;
 import io.github.trustrag.core.model.ReviewRequest;
 import io.github.trustrag.core.model.ReviewStatus;
@@ -11,6 +12,7 @@ import io.github.trustrag.core.model.ReviewTask;
 import io.github.trustrag.core.model.ScopeContext;
 import io.github.trustrag.core.spi.EmbeddingClient;
 import io.github.trustrag.core.spi.KnowledgeRepository;
+import io.github.trustrag.core.spi.KnowledgeLineageRepository;
 import io.github.trustrag.core.spi.KnowledgeVectorStore;
 import io.github.trustrag.core.spi.ReviewCallback;
 import io.github.trustrag.core.spi.ReviewTaskRepository;
@@ -26,26 +28,32 @@ public final class KnowledgeReviewService {
 
     private final KnowledgeRepository knowledgeRepository;
     private final ReviewTaskRepository reviewTaskRepository;
+    private final KnowledgeLineageRepository lineageRepository;
     private final EmbeddingClient embeddingClient;
     private final KnowledgeVectorStore vectorStore;
     private final List<ReviewCallback> callbacks;
     private final TransactionRunner transactionRunner;
+    private final KnowledgeStateMachine stateMachine;
     private final Clock clock;
 
     public KnowledgeReviewService(
             KnowledgeRepository knowledgeRepository,
             ReviewTaskRepository reviewTaskRepository,
+            KnowledgeLineageRepository lineageRepository,
             EmbeddingClient embeddingClient,
             KnowledgeVectorStore vectorStore,
             List<ReviewCallback> callbacks,
             TransactionRunner transactionRunner,
+            KnowledgeStateMachine stateMachine,
             Clock clock) {
         this.knowledgeRepository = knowledgeRepository;
         this.reviewTaskRepository = reviewTaskRepository;
+        this.lineageRepository = lineageRepository;
         this.embeddingClient = embeddingClient;
         this.vectorStore = vectorStore;
         this.callbacks = callbacks == null ? List.of() : List.copyOf(callbacks);
         this.transactionRunner = transactionRunner;
+        this.stateMachine = stateMachine;
         this.clock = clock;
     }
 
@@ -60,7 +68,7 @@ public final class KnowledgeReviewService {
             int limit,
             int offset) {
         return knowledgeRepository.findCandidates(
-                status == null ? KnowledgeStatus.PENDING_REVIEW : status,
+                status == null ? KnowledgeStatus.HUMAN_REVIEW_PENDING : status,
                 trustLevel,
                 scopeType,
                 Math.min(Math.max(limit, 1), 200),
@@ -69,12 +77,13 @@ public final class KnowledgeReviewService {
 
     public KnowledgeItem approve(long knowledgeId, ReviewRequest request) {
         validateReviewRequest(request);
-        KnowledgeItem candidate = loadPendingCandidate(knowledgeId);
+        KnowledgeItem candidate = loadReviewableCandidate(knowledgeId);
         ReviewTask task = loadPendingTask(knowledgeId);
         ScopeContext context = new ScopeContext(
                 candidate.userId(), candidate.conversationId(), candidate.projectId(), candidate.tenantId());
         KnowledgeItem indexing = candidate
-                .approve(request.reviewerId(), request.modifiedTitle(), request.modifiedContent(), clock.instant())
+                .beginHighApproval(
+                        request.reviewerId(), request.modifiedTitle(), request.modifiedContent(), clock.instant())
                 .withHash(KnowledgeHashes.scopedHash(
                         request.modifiedContent() == null || request.modifiedContent().isBlank()
                                 ? candidate.content()
@@ -90,6 +99,7 @@ public final class KnowledgeReviewService {
                     throw new InvalidKnowledgeStateException(
                             "Approved content duplicates knowledge item " + existing.id());
                 });
+        stateMachine.validate(candidate.status(), KnowledgeStatus.INDEXING);
         if (!knowledgeRepository.updateIfState(indexing, candidate.status(), candidate.version())) {
             throw new InvalidKnowledgeStateException(
                     "Knowledge item " + knowledgeId + " was changed by another reviewer");
@@ -101,7 +111,7 @@ public final class KnowledgeReviewService {
                 throw new TrustRagException("Embedding dimension mismatch while approving knowledge " + knowledgeId);
             }
             KnowledgeItem enabled = indexing.withIndexState(
-                    KnowledgeStatus.ENABLED,
+                    KnowledgeStatus.HIGH_ENABLED,
                     Long.toString(indexing.id()),
                     embeddingClient.modelName(),
                     embeddingClient.dimension(),
@@ -111,6 +121,9 @@ public final class KnowledgeReviewService {
                 knowledgeRepository.update(enabled);
                 reviewTaskRepository.update(task.complete(
                         ReviewStatus.APPROVED, request.reviewerId(), "approve", request.comment(), clock.instant()));
+                lineageRepository.save(new KnowledgeLineage(
+                        null, enabled.id(), candidate.id(), null, null,
+                        "MEDIUM_TO_HIGH_APPROVED", "HUMAN", request.reviewerId(), clock.instant()));
             });
             notifyCallbacks(enabled);
             return enabled;
@@ -128,9 +141,10 @@ public final class KnowledgeReviewService {
 
     public KnowledgeItem reject(long knowledgeId, ReviewRequest request) {
         validateReviewRequest(request);
-        KnowledgeItem candidate = loadPendingCandidate(knowledgeId);
+        KnowledgeItem candidate = loadReviewableCandidate(knowledgeId);
         ReviewTask task = loadPendingTask(knowledgeId);
         KnowledgeItem rejected = candidate.reject(request.comment(), clock.instant());
+        stateMachine.validate(candidate.status(), KnowledgeStatus.REJECTED);
         transactionRunner.required(() -> {
             if (!knowledgeRepository.updateIfState(rejected, candidate.status(), candidate.version())) {
                 throw new InvalidKnowledgeStateException(
@@ -138,6 +152,9 @@ public final class KnowledgeReviewService {
             }
             reviewTaskRepository.update(task.complete(
                     ReviewStatus.REJECTED, request.reviewerId(), "reject", request.comment(), clock.instant()));
+            lineageRepository.save(new KnowledgeLineage(
+                    null, rejected.id(), candidate.id(), null, null,
+                    "HUMAN_REVIEW_REJECTED", "HUMAN", request.reviewerId(), clock.instant()));
         });
         try {
             vectorStore.delete(knowledgeId);
@@ -150,11 +167,10 @@ public final class KnowledgeReviewService {
         return rejected;
     }
 
-    private KnowledgeItem loadPendingCandidate(long knowledgeId) {
+    private KnowledgeItem loadReviewableCandidate(long knowledgeId) {
         KnowledgeItem candidate = knowledgeRepository.findById(knowledgeId)
                 .orElseThrow(() -> new KnowledgeNotFoundException(knowledgeId));
-        if (candidate.status() != KnowledgeStatus.PENDING_REVIEW
-                && candidate.status() != KnowledgeStatus.INDEX_FAILED) {
+        if (!candidate.status().isHumanReviewable()) {
             throw new InvalidKnowledgeStateException(
                     "Knowledge item " + knowledgeId + " is not reviewable: " + candidate.status());
         }

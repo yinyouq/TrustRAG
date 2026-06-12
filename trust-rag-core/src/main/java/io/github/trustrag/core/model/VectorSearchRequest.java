@@ -9,7 +9,18 @@ public record VectorSearchRequest(
         Set<TrustLevel> trustLevels,
         Set<KnowledgeStatus> statuses,
         int topK,
-        double minScore) {
+        double minScore,
+        boolean allowGlobalCandidate) {
+
+    public VectorSearchRequest(
+            List<Float> vector,
+            ScopeContext scope,
+            Set<TrustLevel> trustLevels,
+            Set<KnowledgeStatus> statuses,
+            int topK,
+            double minScore) {
+        this(vector, scope, trustLevels, statuses, topK, minScore, false);
+    }
 
     public VectorSearchRequest {
         vector = List.copyOf(vector);

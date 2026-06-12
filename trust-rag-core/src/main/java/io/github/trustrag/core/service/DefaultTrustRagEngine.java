@@ -15,6 +15,7 @@ import io.github.trustrag.core.model.ScopeContext;
 import io.github.trustrag.core.model.TokenUsage;
 import io.github.trustrag.core.model.UsedKnowledge;
 import io.github.trustrag.core.spi.KnowledgeGapDetector;
+import io.github.trustrag.core.spi.KnowledgeRepository;
 import io.github.trustrag.core.spi.LlmClient;
 import io.github.trustrag.core.spi.PromptBuilder;
 import io.github.trustrag.core.spi.QueryRewriteService;
@@ -39,6 +40,7 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
     private final PromptBuilder promptBuilder;
     private final LlmClient llmClient;
     private final RagTraceRepository traceRepository;
+    private final KnowledgeRepository knowledgeRepository;
     private final KnowledgeGapDetector gapDetector;
     private final ScopeResolver scopeResolver;
     private final EngineOptions options;
@@ -51,6 +53,7 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
             PromptBuilder promptBuilder,
             LlmClient llmClient,
             RagTraceRepository traceRepository,
+            KnowledgeRepository knowledgeRepository,
             KnowledgeGapDetector gapDetector,
             ScopeResolver scopeResolver,
             EngineOptions options,
@@ -61,6 +64,7 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
         this.promptBuilder = promptBuilder;
         this.llmClient = llmClient;
         this.traceRepository = traceRepository;
+        this.knowledgeRepository = knowledgeRepository;
         this.gapDetector = gapDetector;
         this.scopeResolver = scopeResolver;
         this.options = options;
@@ -122,6 +126,7 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
             }
             trace.complete(response, gap, elapsed(startedNanos));
             safeRecord(trace);
+            recordUsage(used);
             return toAnswer(trace);
         } catch (RuntimeException exception) {
             trace.fail(exception, elapsed(startedNanos));
@@ -187,6 +192,19 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
             traceRepository.save(trace);
         } catch (Exception exception) {
             LOGGER.log(System.Logger.Level.ERROR, "RagTrace persistence failed for trace " + trace.traceId(), exception);
+        }
+    }
+
+    private void recordUsage(List<RetrievedChunk> used) {
+        for (RetrievedChunk chunk : used) {
+            try {
+                knowledgeRepository.incrementUsageCount(chunk.knowledgeId());
+            } catch (Exception exception) {
+                LOGGER.log(
+                        System.Logger.Level.WARNING,
+                        "Knowledge usage update failed for " + chunk.knowledgeId(),
+                        exception);
+            }
         }
     }
 

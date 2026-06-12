@@ -58,7 +58,7 @@ class JdbcRepositoriesTest {
         assertThat(knowledgeRepository.findById(saved.id())).contains(saved);
 
         KnowledgeItem enabled = saved.withIndexState(
-                KnowledgeStatus.ENABLED, saved.id().toString(), "test-model", 3, now);
+                KnowledgeStatus.HIGH_ENABLED, saved.id().toString(), "test-model", 3, now);
         assertThat(knowledgeRepository.updateIfState(
                 enabled, KnowledgeStatus.INDEXING, saved.version())).isTrue();
         assertThat(knowledgeRepository.updateIfState(

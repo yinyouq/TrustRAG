@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RuleBasedKnowledgeGapDetectorTest {
 
     private final RuleBasedKnowledgeGapDetector detector = new RuleBasedKnowledgeGapDetector(
-            new GapDetectionOptions(0.65, 0.55, 0.50, List.of("资料不足")));
+            new GapDetectionOptions(0.65, 0.55, 0.50, List.of("insufficient information")));
 
     @Test
     void detectsMissingKnowledgeWithoutRetrieval() {
@@ -24,7 +24,7 @@ class RuleBasedKnowledgeGapDetectorTest {
                 RagRequest.builder().question("unknown").build(),
                 Instant.parse("2026-06-12T00:00:00Z"));
         trace.complete(
-                new LlmResponse("资料不足", 0.1, TokenUsage.unknown()),
+                new LlmResponse("insufficient information", 0.1, TokenUsage.unknown()),
                 null,
                 10);
 

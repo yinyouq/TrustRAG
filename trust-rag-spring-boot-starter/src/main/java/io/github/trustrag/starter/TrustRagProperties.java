@@ -3,7 +3,9 @@ package io.github.trustrag.starter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @ConfigurationProperties("trust-rag")
 public class TrustRagProperties {
@@ -18,6 +20,11 @@ public class TrustRagProperties {
     private final Chunk chunk = new Chunk();
     private final Trace trace = new Trace();
     private final AdminApi adminApi = new AdminApi();
+    private final Promotion promotion = new Promotion();
+    private final DuplicateDetection duplicateDetection = new DuplicateDetection();
+    private final ConflictDetection conflictDetection = new ConflictDetection();
+    private final SourceScore sourceScore = new SourceScore();
+    private final Lifecycle lifecycle = new Lifecycle();
 
     public boolean isEnabled() {
         return enabled;
@@ -61,6 +68,26 @@ public class TrustRagProperties {
 
     public AdminApi getAdminApi() {
         return adminApi;
+    }
+
+    public Promotion getPromotion() {
+        return promotion;
+    }
+
+    public DuplicateDetection getDuplicateDetection() {
+        return duplicateDetection;
+    }
+
+    public ConflictDetection getConflictDetection() {
+        return conflictDetection;
+    }
+
+    public SourceScore getSourceScore() {
+        return sourceScore;
+    }
+
+    public Lifecycle getLifecycle() {
+        return lifecycle;
     }
 
     public static class Engine {
@@ -233,8 +260,10 @@ public class TrustRagProperties {
 
     public static class Retrieval {
         private int highTrustTopK = 5;
+        private int mediumTrustTopK = 3;
         private int lowTrustTopK = 3;
         private double minVectorScore = 0.60;
+        private boolean allowGlobalLowCandidate;
 
         public int getHighTrustTopK() {
             return highTrustTopK;
@@ -242,6 +271,14 @@ public class TrustRagProperties {
 
         public void setHighTrustTopK(int highTrustTopK) {
             this.highTrustTopK = highTrustTopK;
+        }
+
+        public int getMediumTrustTopK() {
+            return mediumTrustTopK;
+        }
+
+        public void setMediumTrustTopK(int mediumTrustTopK) {
+            this.mediumTrustTopK = mediumTrustTopK;
         }
 
         public int getLowTrustTopK() {
@@ -259,14 +296,24 @@ public class TrustRagProperties {
         public void setMinVectorScore(double minVectorScore) {
             this.minVectorScore = minVectorScore;
         }
+
+        public boolean isAllowGlobalLowCandidate() {
+            return allowGlobalLowCandidate;
+        }
+
+        public void setAllowGlobalLowCandidate(boolean allowGlobalLowCandidate) {
+            this.allowGlobalLowCandidate = allowGlobalLowCandidate;
+        }
     }
 
     public static class TrustWeight {
         private double high = 1.0;
+        private double medium = 0.70;
         private double lowConversation = 0.60;
         private double lowUser = 0.45;
         private double lowProject = 0.45;
         private double lowTenant = 0.35;
+        private double lowGlobalCandidate = 0.20;
 
         public double getHigh() {
             return high;
@@ -274,6 +321,14 @@ public class TrustRagProperties {
 
         public void setHigh(double high) {
             this.high = high;
+        }
+
+        public double getMedium() {
+            return medium;
+        }
+
+        public void setMedium(double medium) {
+            this.medium = medium;
         }
 
         public double getLowConversation() {
@@ -306,6 +361,14 @@ public class TrustRagProperties {
 
         public void setLowTenant(double lowTenant) {
             this.lowTenant = lowTenant;
+        }
+
+        public double getLowGlobalCandidate() {
+            return lowGlobalCandidate;
+        }
+
+        public void setLowGlobalCandidate(double lowGlobalCandidate) {
+            this.lowGlobalCandidate = lowGlobalCandidate;
         }
     }
 
@@ -422,5 +485,119 @@ public class TrustRagProperties {
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
         }
+    }
+
+    public static class Promotion {
+        private boolean enabled = true;
+        private int batchSize = 50;
+        private int retryLimit = 3;
+        private double minPromotionScore = 0.75;
+        private double minSourceScore = 0.60;
+        private double minEvidenceScore = 0.50;
+        private double maxConflictRisk = 0.30;
+        private double maxPrivacyRisk = 0.30;
+        private boolean llmPreReviewEnabled = true;
+        private String schedule = "0 0 3 * * ?";
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public int getBatchSize() { return batchSize; }
+        public void setBatchSize(int batchSize) { this.batchSize = batchSize; }
+        public int getRetryLimit() { return retryLimit; }
+        public void setRetryLimit(int retryLimit) { this.retryLimit = retryLimit; }
+        public double getMinPromotionScore() { return minPromotionScore; }
+        public void setMinPromotionScore(double value) { this.minPromotionScore = value; }
+        public double getMinSourceScore() { return minSourceScore; }
+        public void setMinSourceScore(double value) { this.minSourceScore = value; }
+        public double getMinEvidenceScore() { return minEvidenceScore; }
+        public void setMinEvidenceScore(double value) { this.minEvidenceScore = value; }
+        public double getMaxConflictRisk() { return maxConflictRisk; }
+        public void setMaxConflictRisk(double value) { this.maxConflictRisk = value; }
+        public double getMaxPrivacyRisk() { return maxPrivacyRisk; }
+        public void setMaxPrivacyRisk(double value) { this.maxPrivacyRisk = value; }
+        public boolean isLlmPreReviewEnabled() { return llmPreReviewEnabled; }
+        public void setLlmPreReviewEnabled(boolean value) { this.llmPreReviewEnabled = value; }
+        public String getSchedule() { return schedule; }
+        public void setSchedule(String schedule) { this.schedule = schedule; }
+    }
+
+    public static class DuplicateDetection {
+        private boolean enabled = true;
+        private boolean hashEnabled = true;
+        private boolean vectorEnabled = true;
+        private double similarityThreshold = 0.92;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public boolean isHashEnabled() { return hashEnabled; }
+        public void setHashEnabled(boolean value) { this.hashEnabled = value; }
+        public boolean isVectorEnabled() { return vectorEnabled; }
+        public void setVectorEnabled(boolean value) { this.vectorEnabled = value; }
+        public double getSimilarityThreshold() { return similarityThreshold; }
+        public void setSimilarityThreshold(double value) { this.similarityThreshold = value; }
+    }
+
+    public static class ConflictDetection {
+        private boolean enabled = true;
+        private boolean compareWithHigh = true;
+        private boolean compareWithMedium = true;
+        private int topK = 5;
+        private double similarityThreshold = 0.75;
+        private boolean llmJudgeEnabled = true;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public boolean isCompareWithHigh() { return compareWithHigh; }
+        public void setCompareWithHigh(boolean value) { this.compareWithHigh = value; }
+        public boolean isCompareWithMedium() { return compareWithMedium; }
+        public void setCompareWithMedium(boolean value) { this.compareWithMedium = value; }
+        public int getTopK() { return topK; }
+        public void setTopK(int topK) { this.topK = topK; }
+        public double getSimilarityThreshold() { return similarityThreshold; }
+        public void setSimilarityThreshold(double value) { this.similarityThreshold = value; }
+        public boolean isLlmJudgeEnabled() { return llmJudgeEnabled; }
+        public void setLlmJudgeEnabled(boolean value) { this.llmJudgeEnabled = value; }
+    }
+
+    public static class SourceScore {
+        private Map<String, Double> scores = defaults();
+
+        public Map<String, Double> getScores() { return scores; }
+        public void setScores(Map<String, Double> scores) { this.scores = scores; }
+
+        private static Map<String, Double> defaults() {
+            Map<String, Double> values = new LinkedHashMap<>();
+            values.put("official", 0.95);
+            values.put("manual", 0.85);
+            values.put("document", 0.80);
+            values.put("database", 0.80);
+            values.put("user_correction", 0.60);
+            values.put("conversation", 0.45);
+            values.put("unknown", 0.10);
+            return values;
+        }
+    }
+
+    public static class Lifecycle {
+        private int lowTtlDays = 30;
+        private int mediumTtlDays = 180;
+        private boolean autoExpireEnabled = true;
+        private int negativeFeedbackDowngradeThreshold = 3;
+        private int indexFailedRetryLimit = 3;
+
+        public int getLowTtlDays() { return lowTtlDays; }
+        public void setLowTtlDays(int value) { this.lowTtlDays = value; }
+        public int getMediumTtlDays() { return mediumTtlDays; }
+        public void setMediumTtlDays(int value) { this.mediumTtlDays = value; }
+        public boolean isAutoExpireEnabled() { return autoExpireEnabled; }
+        public void setAutoExpireEnabled(boolean value) { this.autoExpireEnabled = value; }
+        public int getNegativeFeedbackDowngradeThreshold() {
+            return negativeFeedbackDowngradeThreshold;
+        }
+        public void setNegativeFeedbackDowngradeThreshold(int value) {
+            this.negativeFeedbackDowngradeThreshold = value;
+        }
+        public int getIndexFailedRetryLimit() { return indexFailedRetryLimit; }
+        public void setIndexFailedRetryLimit(int value) { this.indexFailedRetryLimit = value; }
     }
 }

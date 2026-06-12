@@ -31,11 +31,55 @@ public record KnowledgeItem(
         String rejectReason,
         Instant createdAt,
         Instant updatedAt,
-        Instant expiresAt) {
+        Instant expiresAt,
+        KnowledgeGovernance governance) {
+
+    public KnowledgeItem(
+            Long id,
+            String title,
+            String claim,
+            String content,
+            String summary,
+            String knowledgeType,
+            TrustLevel trustLevel,
+            KnowledgeStatus status,
+            ScopeType scopeType,
+            String userId,
+            String conversationId,
+            String projectId,
+            String tenantId,
+            String sourceType,
+            String sourceRef,
+            String evidence,
+            String embeddingId,
+            String embeddingModel,
+            Integer embeddingDimension,
+            Double confidence,
+            Double privacyScore,
+            int version,
+            String hash,
+            String approvedBy,
+            Instant approvedAt,
+            String rejectReason,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant expiresAt) {
+        this(
+                id, title, claim, content, summary, knowledgeType, trustLevel, status, scopeType,
+                userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
+                embeddingId, embeddingModel, embeddingDimension, confidence, privacyScore,
+                version, hash, approvedBy, approvedAt, rejectReason, createdAt, updatedAt,
+                expiresAt, KnowledgeGovernance.empty());
+    }
+
+    public KnowledgeItem {
+        governance = governance == null ? KnowledgeGovernance.empty() : governance;
+    }
 
     public KnowledgeItem withId(long newId) {
-        return copy(newId, title, content, trustLevel, status, version, approvedBy, approvedAt, rejectReason,
-                embeddingId, embeddingModel, embeddingDimension, updatedAt);
+        return copy(newId, title, content, trustLevel, status, scopeType, version,
+                approvedBy, approvedAt, rejectReason, embeddingId, embeddingModel,
+                embeddingDimension, updatedAt, governance);
     }
 
     public KnowledgeItem withIndexState(
@@ -44,11 +88,12 @@ public record KnowledgeItem(
             String newEmbeddingModel,
             Integer newEmbeddingDimension,
             Instant now) {
-        return copy(id, title, content, trustLevel, newStatus, version, approvedBy, approvedAt, rejectReason,
-                newEmbeddingId, newEmbeddingModel, newEmbeddingDimension, now);
+        return copy(id, title, content, trustLevel, newStatus, scopeType, version,
+                approvedBy, approvedAt, rejectReason, newEmbeddingId, newEmbeddingModel,
+                newEmbeddingDimension, now, governance);
     }
 
-    public KnowledgeItem approve(String reviewer, String newTitle, String newContent, Instant now) {
+    public KnowledgeItem beginHighApproval(String reviewer, String newTitle, String newContent, Instant now) {
         String effectiveTitle = newTitle == null || newTitle.isBlank() ? title : newTitle.trim();
         String effectiveContent = newContent == null || newContent.isBlank() ? content : newContent.trim();
         ScopeType approvedScope = scopeType == ScopeType.GLOBAL_CANDIDATE ? ScopeType.GLOBAL : scopeType;
@@ -57,12 +102,63 @@ public record KnowledgeItem(
                 TrustLevel.HIGH, KnowledgeStatus.INDEXING, approvedScope,
                 userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
                 embeddingId, embeddingModel, embeddingDimension, confidence, privacyScore,
-                version + 1, hash, reviewer, now, null, createdAt, now, expiresAt);
+                version + 1, hash, reviewer, now, null, createdAt, now, null,
+                governance.withPrevious(trustLevel, status));
+    }
+
+    public KnowledgeItem promoteToMedium(
+            KnowledgeGovernance evaluatedGovernance,
+            String newTitle,
+            String newClaim,
+            Instant now) {
+        ScopeType promotedScope = scopeType == ScopeType.GLOBAL_CANDIDATE
+                ? ScopeType.GLOBAL
+                : scopeType;
+        return new KnowledgeItem(
+                id,
+                newTitle == null || newTitle.isBlank() ? title : newTitle.trim(),
+                newClaim == null || newClaim.isBlank() ? claim : newClaim.trim(),
+                content,
+                summary,
+                knowledgeType,
+                TrustLevel.MEDIUM,
+                KnowledgeStatus.HUMAN_REVIEW_PENDING,
+                promotedScope,
+                userId,
+                conversationId,
+                projectId,
+                tenantId,
+                sourceType,
+                sourceRef,
+                evidence,
+                embeddingId,
+                embeddingModel,
+                embeddingDimension,
+                confidence,
+                privacyScore,
+                version + 1,
+                hash,
+                approvedBy,
+                approvedAt,
+                null,
+                createdAt,
+                now,
+                expiresAt,
+                evaluatedGovernance.withPrevious(trustLevel, status));
     }
 
     public KnowledgeItem reject(String reason, Instant now) {
-        return copy(id, title, content, trustLevel, KnowledgeStatus.REJECTED, version + 1,
-                approvedBy, approvedAt, reason, embeddingId, embeddingModel, embeddingDimension, now);
+        return transition(trustLevel, KnowledgeStatus.REJECTED, reason, now);
+    }
+
+    public KnowledgeItem transition(
+            TrustLevel newTrustLevel,
+            KnowledgeStatus newStatus,
+            String reason,
+            Instant now) {
+        return copy(id, title, content, newTrustLevel, newStatus, scopeType, version + 1,
+                approvedBy, approvedAt, reason, embeddingId, embeddingModel,
+                embeddingDimension, now, governance.withPrevious(trustLevel, status));
     }
 
     public KnowledgeItem withHash(String newHash) {
@@ -70,7 +166,51 @@ public record KnowledgeItem(
                 id, title, claim, content, summary, knowledgeType, trustLevel, status, scopeType,
                 userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
                 embeddingId, embeddingModel, embeddingDimension, confidence, privacyScore,
-                version, newHash, approvedBy, approvedAt, rejectReason, createdAt, updatedAt, expiresAt);
+                version, newHash, approvedBy, approvedAt, rejectReason, createdAt, updatedAt,
+                expiresAt, governance);
+    }
+
+    public KnowledgeItem withExpiresAt(Instant newExpiresAt, Instant now) {
+        return new KnowledgeItem(
+                id, title, claim, content, summary, knowledgeType, trustLevel, status, scopeType,
+                userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
+                embeddingId, embeddingModel, embeddingDimension, confidence, privacyScore,
+                version, hash, approvedBy, approvedAt, rejectReason, createdAt, now,
+                newExpiresAt, governance);
+    }
+
+    public KnowledgeItem withGovernance(KnowledgeGovernance newGovernance, Instant now) {
+        return copy(id, title, content, trustLevel, status, scopeType, version,
+                approvedBy, approvedAt, rejectReason, embeddingId, embeddingModel,
+                embeddingDimension, now, newGovernance);
+    }
+
+    public KnowledgeItem withStatus(KnowledgeStatus newStatus, Instant now) {
+        return copy(id, title, content, trustLevel, newStatus, scopeType, version + 1,
+                approvedBy, approvedAt, rejectReason, embeddingId, embeddingModel,
+                embeddingDimension, now, governance.withPrevious(trustLevel, status));
+    }
+
+    public KnowledgeItem rollback(Instant now) {
+        TrustLevel targetTrust = governance.previousTrustLevel();
+        KnowledgeStatus targetStatus = governance.previousStatus();
+        if (targetTrust == null || targetStatus == null) {
+            throw new IllegalStateException("Knowledge item has no previous state to roll back");
+        }
+        return copy(id, title, content, targetTrust, KnowledgeStatus.ROLLBACK, scopeType, version + 1,
+                approvedBy, approvedAt, "rollback to " + targetStatus, embeddingId, embeddingModel,
+                embeddingDimension, now, governance);
+    }
+
+    public KnowledgeItem restorePrevious(Instant now) {
+        TrustLevel targetTrust = governance.previousTrustLevel();
+        KnowledgeStatus targetStatus = governance.previousStatus();
+        if (targetTrust == null || targetStatus == null) {
+            throw new IllegalStateException("Knowledge item has no previous state to restore");
+        }
+        return copy(id, title, content, targetTrust, targetStatus, scopeType, version + 1,
+                approvedBy, approvedAt, "restored previous state", embeddingId, embeddingModel,
+                embeddingDimension, now, governance.withPrevious(trustLevel, status));
     }
 
     private KnowledgeItem copy(
@@ -79,6 +219,7 @@ public record KnowledgeItem(
             String newContent,
             TrustLevel newTrustLevel,
             KnowledgeStatus newStatus,
+            ScopeType newScopeType,
             int newVersion,
             String newApprovedBy,
             Instant newApprovedAt,
@@ -86,11 +227,14 @@ public record KnowledgeItem(
             String newEmbeddingId,
             String newEmbeddingModel,
             Integer newEmbeddingDimension,
-            Instant newUpdatedAt) {
+            Instant newUpdatedAt,
+            KnowledgeGovernance newGovernance) {
         return new KnowledgeItem(
-                newId, newTitle, claim, newContent, summary, knowledgeType, newTrustLevel, newStatus, scopeType,
+                newId, newTitle, claim, newContent, summary, knowledgeType,
+                newTrustLevel, newStatus, newScopeType,
                 userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
                 newEmbeddingId, newEmbeddingModel, newEmbeddingDimension, confidence, privacyScore,
-                newVersion, hash, newApprovedBy, newApprovedAt, newRejectReason, createdAt, newUpdatedAt, expiresAt);
+                newVersion, hash, newApprovedBy, newApprovedAt, newRejectReason,
+                createdAt, newUpdatedAt, expiresAt, newGovernance);
     }
 }

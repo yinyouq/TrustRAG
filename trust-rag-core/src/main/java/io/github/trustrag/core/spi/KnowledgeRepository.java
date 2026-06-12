@@ -8,6 +8,8 @@ import io.github.trustrag.core.model.TrustLevel;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.time.Instant;
+import java.util.Set;
 
 public interface KnowledgeRepository {
 
@@ -24,6 +26,8 @@ public interface KnowledgeRepository {
 
     Optional<KnowledgeItem> findByHash(String hash);
 
+    Optional<KnowledgeItem> findByClaimHash(String claimHash, long excludedKnowledgeId);
+
     List<KnowledgeItem> findAllByIds(Collection<Long> ids);
 
     List<KnowledgeItem> findCandidates(
@@ -32,4 +36,20 @@ public interface KnowledgeRepository {
             ScopeType scopeType,
             int limit,
             int offset);
+
+    List<KnowledgeItem> findByTrustAndStatuses(
+            TrustLevel trustLevel,
+            Set<KnowledgeStatus> statuses,
+            int limit,
+            int offset);
+
+    List<KnowledgeItem> findPromotionCandidates(int limit);
+
+    List<KnowledgeItem> findExpired(Instant now, int limit);
+
+    List<KnowledgeItem> findNegativeFeedbackCandidates(int threshold, int limit);
+
+    void incrementUsageCount(long knowledgeId);
+
+    void incrementFeedbackCounts(Collection<Long> knowledgeIds, boolean positive, boolean negative);
 }

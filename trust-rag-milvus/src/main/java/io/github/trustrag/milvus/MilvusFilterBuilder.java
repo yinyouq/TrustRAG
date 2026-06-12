@@ -19,6 +19,8 @@ public final class MilvusFilterBuilder {
         List<String> visibleScopes = new ArrayList<>();
         if (!request.trustLevels().contains(TrustLevel.LOW)) {
             visibleScopes.add("scope_type == \"GLOBAL\"");
+        } else if (request.allowGlobalCandidate()) {
+            visibleScopes.add("scope_type == \"GLOBAL_CANDIDATE\"");
         }
         ScopeContext scope = request.scope();
         addScope(visibleScopes, values, "TENANT", "tenant_id", "tenantId", scope.tenantId());

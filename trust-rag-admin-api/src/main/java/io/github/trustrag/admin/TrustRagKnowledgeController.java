@@ -52,7 +52,7 @@ public final class TrustRagKnowledgeController {
 
     @GetMapping("/candidates")
     public List<KnowledgeItem> candidates(
-            @RequestParam(defaultValue = "PENDING_REVIEW") String status,
+            @RequestParam(defaultValue = "HUMAN_REVIEW_PENDING") String status,
             @RequestParam(required = false) String trustLevel,
             @RequestParam(required = false) String scopeType,
             @RequestParam(defaultValue = "50") int limit,
@@ -84,7 +84,7 @@ public final class TrustRagKnowledgeController {
                 request.sourceRef(),
                 scope,
                 TrustLevel.LOW,
-                KnowledgeStatus.PENDING_REVIEW,
+                KnowledgeStatus.LOW_PENDING,
                 0.80,
                 request.tags());
         return candidateService.submit(candidate, request.scopeContext());
@@ -108,6 +108,11 @@ public final class TrustRagKnowledgeController {
 
     @PostMapping("/{id}/approve")
     public KnowledgeItem approve(@PathVariable long id, @Valid @RequestBody ReviewBody request) {
+        return reviewService.approve(id, request.toCore());
+    }
+
+    @PostMapping("/{id}/approve-high")
+    public KnowledgeItem approveHigh(@PathVariable long id, @Valid @RequestBody ReviewBody request) {
         return reviewService.approve(id, request.toCore());
     }
 

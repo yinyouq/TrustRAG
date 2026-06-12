@@ -10,17 +10,20 @@ import io.github.trustrag.core.model.ScopeContext;
 import io.github.trustrag.core.model.ScopeType;
 import io.github.trustrag.core.spi.CandidateExtractor;
 import io.github.trustrag.core.spi.FeedbackRepository;
+import io.github.trustrag.core.spi.KnowledgeRepository;
 import io.github.trustrag.core.spi.PrivacyFilter;
 import io.github.trustrag.core.spi.RagTraceRepository;
 import io.github.trustrag.core.spi.ScopeClassifier;
 import io.github.trustrag.core.spi.TransactionRunner;
 
 import java.util.Optional;
+import java.util.List;
 
 public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackService {
 
     private final FeedbackRepository feedbackRepository;
     private final RagTraceRepository traceRepository;
+    private final KnowledgeRepository knowledgeRepository;
     private final PrivacyFilter privacyFilter;
     private final ScopeClassifier scopeClassifier;
     private final CandidateExtractor candidateExtractor;
@@ -30,6 +33,7 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
     public DefaultTrustRagFeedbackService(
             FeedbackRepository feedbackRepository,
             RagTraceRepository traceRepository,
+            KnowledgeRepository knowledgeRepository,
             PrivacyFilter privacyFilter,
             ScopeClassifier scopeClassifier,
             CandidateExtractor candidateExtractor,
@@ -37,6 +41,7 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
             TransactionRunner transactionRunner) {
         this.feedbackRepository = feedbackRepository;
         this.traceRepository = traceRepository;
+        this.knowledgeRepository = knowledgeRepository;
         this.privacyFilter = privacyFilter;
         this.scopeClassifier = scopeClassifier;
         this.candidateExtractor = candidateExtractor;
@@ -54,7 +59,10 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
                 correctionPrivacy.sanitizedContent(), request.userId(), request.conversationId(),
                 request.projectId(), request.tenantId());
         if (request.feedbackType() != FeedbackType.CORRECTION) {
-            transactionRunner.required(() -> feedbackRepository.save(sanitized));
+            transactionRunner.required(() -> {
+                feedbackRepository.save(sanitized);
+                updateFeedbackCounters(request);
+            });
             return Optional.empty();
         }
         if (correctionPrivacy.sanitizedContent() == null || correctionPrivacy.sanitizedContent().isBlank()) {
@@ -71,8 +79,19 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
                 sanitized, correctionPrivacy.sanitizedContent(), scope);
         return transactionRunner.required(() -> {
             feedbackRepository.save(sanitized);
+            updateFeedbackCounters(request);
             return Optional.of(candidateKnowledgeService.submit(candidate, context));
         });
+    }
+
+    private void updateFeedbackCounters(RagFeedbackRequest request) {
+        List<Long> knowledgeIds = traceRepository.findUsedKnowledgeIds(request.traceId());
+        boolean positive = request.feedbackType() == FeedbackType.LIKE;
+        boolean negative = switch (request.feedbackType()) {
+            case DISLIKE, CORRECTION, IRRELEVANT_CONTEXT, WRONG_ANSWER, MISSING_KNOWLEDGE -> true;
+            case LIKE -> false;
+        };
+        knowledgeRepository.incrementFeedbackCounts(knowledgeIds, positive, negative);
     }
 
     private PrivacyResult sanitizeOptional(String value) {

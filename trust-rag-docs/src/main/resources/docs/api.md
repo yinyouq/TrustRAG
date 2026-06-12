@@ -1,9 +1,8 @@
 # HTTP API
 
-管理 API 仅在 `trust-rag.admin-api.enabled=true` 且应用为 Servlet Web 应用时注册。
-生产环境必须为 `/trust-rag/**` 配置身份认证和管理权限。
+管理 API 仅在 `trust-rag.admin-api.enabled=true` 且应用为 Servlet Web 应用时注册。生产环境必须为 `/trust-rag/**` 配置身份认证和管理权限。
 
-## 问答示例
+## 问答
 
 示例应用提供：
 
@@ -39,23 +38,18 @@ POST /trust-rag/feedback
 }
 ```
 
-`CORRECTION` 必须提供 `correctedAnswer`。普通 `LIKE`、`DISLIKE` 等反馈只落库，
-不会生成候选。
+`CORRECTION` 必须提供 `correctedAnswer`，并创建 `LOW_PENDING` 候选。所有反馈都会通过 trace 回流到实际用于回答的知识项。
 
-## 查询候选
+## 候选与导入
 
 ```http
 GET /trust-rag/admin/knowledge/candidates
-    ?status=PENDING_REVIEW
-    &trustLevel=LOW
-    &scopeType=GLOBAL_CANDIDATE
+    ?status=HUMAN_REVIEW_PENDING
+    &trustLevel=MEDIUM
+    &scopeType=GLOBAL
     &limit=50
     &offset=0
 ```
-
-`trustLevel` 和 `scopeType` 可省略，`limit` 最大为 200。
-
-## 手动创建候选
 
 ```http
 POST /trust-rag/admin/knowledge/candidates
@@ -65,7 +59,7 @@ POST /trust-rag/admin/knowledge/candidates
 {
   "title": "候选标题",
   "claim": "核心结论",
-  "content": "待审核的知识正文",
+  "content": "待治理的知识正文",
   "evidence": "来源证据",
   "sourceRef": "ticket://123",
   "scopeType": "GLOBAL_CANDIDATE",
@@ -73,55 +67,98 @@ POST /trust-rag/admin/knowledge/candidates
 }
 ```
 
-## 导入知识
-
 ```http
 POST /trust-rag/admin/knowledge/import
 ```
 
-```json
-{
-  "title": "官方文档",
-  "content": "经过确认的文档内容",
-  "sourceType": "official_document",
-  "sourceRef": "https://example.invalid/doc",
-  "trustLevel": "HIGH",
-  "scopeType": "GLOBAL"
-}
-```
+导入接口支持 `HIGH`、`MEDIUM`、`LOW`。中可信导入会自动创建人工复核任务；低可信导入由定时治理扫描创建晋升任务。
 
-长文会按 `trust-rag.chunk` 配置切分并逐块向量化。响应包含成功、重复、失败数量和
-已创建的知识 ID。
+## 晋升治理
 
-## 审核通过
+手动运行一批治理任务：
 
 ```http
-POST /trust-rag/admin/knowledge/{id}/approve
+POST /trust-rag/admin/promotion/run?limit=50
 ```
+
+查询任务：
+
+```http
+GET /trust-rag/admin/promotion/tasks
+    ?status=FAILED
+    &taskType=LOW_TO_MEDIUM
+    &knowledgeId=123
+```
+
+查询冲突：
+
+```http
+GET /trust-rag/admin/conflicts?limit=50&offset=0
+```
+
+查询中池：
+
+```http
+GET /trust-rag/admin/knowledge/medium
+```
+
+## 人工终审
+
+```http
+POST /trust-rag/admin/knowledge/{id}/approve-high
+```
+
+兼容端点 `/approve` 行为相同。
 
 ```json
 {
   "reviewerId": "admin",
-  "comment": "已核验来源",
+  "comment": "来源和内容已核验",
   "modifiedTitle": null,
   "modifiedContent": null
 }
 ```
 
-审核通过会重新向量化，并将公共候选从 `GLOBAL_CANDIDATE` 转为 `GLOBAL`。
-
-## 审核拒绝
+拒绝：
 
 ```http
 POST /trust-rag/admin/knowledge/{id}/reject
 ```
 
+## 生命周期治理
+
+降级：
+
+```http
+POST /trust-rag/admin/knowledge/{id}/downgrade
+```
+
+回滚：
+
+```http
+POST /trust-rag/admin/knowledge/{id}/rollback
+```
+
+请求体：
+
 ```json
 {
-  "reviewerId": "admin",
-  "comment": "证据不足"
+  "operatorId": "admin",
+  "reason": "来源失效"
 }
 ```
 
-请求参数或状态不合法返回 400，知识不存在返回 404，向量库、数据库或模型调用等
-系统错误返回 500。
+合并：
+
+```http
+POST /trust-rag/admin/knowledge/{targetId}/merge
+```
+
+```json
+{
+  "operatorId": "admin",
+  "sourceKnowledgeIds": [101, 102]
+}
+```
+
+非法参数或状态返回 400，知识不存在返回 404，数据库、向量库或模型等系统错误返回 500。

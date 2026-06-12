@@ -21,7 +21,7 @@ class MilvusFilterBuilderTest {
                 List.of(0.1f),
                 new ScopeContext("user-1", null, null, "tenant-1"),
                 Set.of(TrustLevel.LOW),
-                Set.of(KnowledgeStatus.ENABLED),
+                Set.of(KnowledgeStatus.LOW_ENABLED),
                 3,
                 0.5));
 
@@ -36,7 +36,7 @@ class MilvusFilterBuilderTest {
                 List.of(0.1f),
                 new ScopeContext(null, null, "project-1", null),
                 Set.of(TrustLevel.HIGH),
-                Set.of(KnowledgeStatus.ENABLED),
+                Set.of(KnowledgeStatus.HIGH_ENABLED),
                 5,
                 0.5));
 

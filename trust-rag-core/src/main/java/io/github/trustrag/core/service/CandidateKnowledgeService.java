@@ -2,37 +2,48 @@ package io.github.trustrag.core.service;
 
 import io.github.trustrag.core.model.CandidateKnowledge;
 import io.github.trustrag.core.model.KnowledgeItem;
+import io.github.trustrag.core.model.KnowledgeLineage;
 import io.github.trustrag.core.model.KnowledgeStatus;
-import io.github.trustrag.core.model.ReviewTask;
+import io.github.trustrag.core.model.PromotionTask;
+import io.github.trustrag.core.model.PromotionTaskType;
 import io.github.trustrag.core.model.ScopeContext;
 import io.github.trustrag.core.model.ScopeType;
 import io.github.trustrag.core.model.TrustLevel;
+import io.github.trustrag.core.config.LifecycleOptions;
 import io.github.trustrag.core.spi.KnowledgeRepository;
-import io.github.trustrag.core.spi.ReviewTaskRepository;
+import io.github.trustrag.core.spi.KnowledgeLineageRepository;
+import io.github.trustrag.core.spi.PromotionTaskRepository;
 import io.github.trustrag.core.spi.TransactionRunner;
 import io.github.trustrag.core.util.KnowledgeHashes;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 public final class CandidateKnowledgeService {
 
     private final KnowledgeRepository knowledgeRepository;
-    private final ReviewTaskRepository reviewTaskRepository;
+    private final PromotionTaskRepository promotionTaskRepository;
+    private final KnowledgeLineageRepository lineageRepository;
     private final KnowledgeVisibilityPolicy visibilityPolicy;
+    private final LifecycleOptions lifecycleOptions;
     private final TransactionRunner transactionRunner;
     private final Clock clock;
 
     public CandidateKnowledgeService(
             KnowledgeRepository knowledgeRepository,
-            ReviewTaskRepository reviewTaskRepository,
+            PromotionTaskRepository promotionTaskRepository,
+            KnowledgeLineageRepository lineageRepository,
             KnowledgeVisibilityPolicy visibilityPolicy,
+            LifecycleOptions lifecycleOptions,
             TransactionRunner transactionRunner,
             Clock clock) {
         this.knowledgeRepository = knowledgeRepository;
-        this.reviewTaskRepository = reviewTaskRepository;
+        this.promotionTaskRepository = promotionTaskRepository;
+        this.lineageRepository = lineageRepository;
         this.visibilityPolicy = visibilityPolicy;
+        this.lifecycleOptions = lifecycleOptions;
         this.transactionRunner = transactionRunner;
         this.clock = clock;
     }
@@ -41,8 +52,8 @@ public final class CandidateKnowledgeService {
         if (candidate == null || candidate.content() == null || candidate.content().isBlank()) {
             throw new IllegalArgumentException("Candidate content must not be blank");
         }
-        if (candidate.trustLevel() != TrustLevel.LOW || candidate.status() != KnowledgeStatus.PENDING_REVIEW) {
-            throw new IllegalArgumentException("New candidates must be LOW and PENDING_REVIEW");
+        if (candidate.trustLevel() != TrustLevel.LOW || candidate.status() != KnowledgeStatus.LOW_PENDING) {
+            throw new IllegalArgumentException("New candidates must be LOW and LOW_PENDING");
         }
         if (candidate.scopeType() == ScopeType.GLOBAL) {
             throw new IllegalArgumentException("Unreviewed candidates cannot use GLOBAL scope");
@@ -60,12 +71,16 @@ public final class CandidateKnowledgeService {
                 context.userId(), context.conversationId(), context.projectId(), context.tenantId(),
                 candidate.sourceType(), candidate.sourceRef(), candidate.evidence(),
                 null, null, null, candidate.confidence(), null, 1, hash,
-                null, null, null, now, now, null);
+                null, null, null, now, now,
+                now.plus(lifecycleOptions.lowTtlDays(), ChronoUnit.DAYS));
         visibilityPolicy.validateOwnership(item);
         try {
             return transactionRunner.required(() -> {
                 KnowledgeItem saved = knowledgeRepository.save(item);
-                reviewTaskRepository.save(ReviewTask.pending(saved.id(), now));
+                promotionTaskRepository.save(PromotionTask.pending(
+                        saved.id(), PromotionTaskType.LOW_TO_MEDIUM, now));
+                lineageRepository.save(KnowledgeLineage.system(
+                        saved.id(), "LOW_CANDIDATE_CREATED", now));
                 return saved;
             });
         } catch (RuntimeException exception) {
@@ -77,8 +92,10 @@ public final class CandidateKnowledgeService {
 
     private KnowledgeItem reusableExisting(KnowledgeItem existing) {
         return switch (existing.status()) {
-            case PENDING_REVIEW, INDEX_FAILED, ENABLED -> existing;
-            case INDEXING, REJECTED, EXPIRED -> throw new IllegalStateException(
+            case LOW_PENDING, LOW_ENABLED, PROMOTION_PENDING, PROMOTION_RUNNING,
+                    MEDIUM_ENABLED, HUMAN_REVIEW_PENDING, HIGH_ENABLED, INDEX_FAILED -> existing;
+            case INDEXING, REJECTED, CONFLICT, EXPIRED, MERGE_PENDING, ROLLBACK ->
+                    throw new IllegalStateException(
                     "Duplicate knowledge exists in non-reusable state: " + existing.status());
         };
     }

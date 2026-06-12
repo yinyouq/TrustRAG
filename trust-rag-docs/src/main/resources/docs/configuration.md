@@ -30,9 +30,6 @@ trust-rag:
   milvus:
     enabled: true
     uri: http://localhost:19530
-    token:
-    username:
-    password:
     database: default
     collection: trust_rag_knowledge
     dimension: 1536
@@ -42,14 +39,57 @@ trust-rag:
     rpc-deadline-ms: 30000
   retrieval:
     high-trust-top-k: 5
+    medium-trust-top-k: 3
     low-trust-top-k: 3
     min-vector-score: 0.60
+    allow-global-low-candidate: false
   trust-weight:
     high: 1.0
+    medium: 0.70
     low-conversation: 0.60
     low-user: 0.45
     low-project: 0.45
     low-tenant: 0.35
+    low-global-candidate: 0.20
+  promotion:
+    enabled: true
+    batch-size: 50
+    retry-limit: 3
+    min-promotion-score: 0.75
+    min-source-score: 0.60
+    min-evidence-score: 0.50
+    max-conflict-risk: 0.30
+    max-privacy-risk: 0.30
+    llm-pre-review-enabled: true
+    schedule: "0 0 3 * * ?"
+  duplicate-detection:
+    enabled: true
+    hash-enabled: true
+    vector-enabled: true
+    similarity-threshold: 0.92
+  conflict-detection:
+    enabled: true
+    compare-with-high: true
+    compare-with-medium: true
+    top-k: 5
+    similarity-threshold: 0.75
+    llm-judge-enabled: true
+  source-score:
+    scores:
+      official: 0.95
+      manual: 0.85
+      document: 0.80
+      database: 0.80
+      user_correction: 0.60
+      conversation: 0.45
+      unknown: 0.10
+  lifecycle:
+    low-ttl-days: 30
+    medium-ttl-days: 180
+    auto-expire-enabled: true
+    negative-feedback-downgrade-threshold: 3
+    # 每轮信任级别最多重试的 INDEX_FAILED 数量；0 表示关闭自动重试
+    index-failed-retry-limit: 3
   gap-detection:
     low-vector-score-threshold: 0.65
     low-rerank-score-threshold: 0.55
@@ -74,7 +114,7 @@ trust-rag:
 
 ## 数据库迁移
 
-PostgreSQL 是默认迁移：
+PostgreSQL：
 
 ```yaml
 spring:
@@ -82,7 +122,7 @@ spring:
     locations: classpath:db/migration
 ```
 
-MySQL 需要切换位置：
+MySQL：
 
 ```yaml
 spring:
@@ -90,26 +130,18 @@ spring:
     locations: classpath:db/mysql
 ```
 
-两套脚本都会创建 `knowledge_item`、`rag_trace`、`retrieval_log`、`feedback` 和
-`review_task`。
+V2 会新增治理字段以及 `promotion_task`、`conflict_record`、`knowledge_lineage`，并把旧版 `ENABLED/PENDING_REVIEW` 状态迁移到三池状态。
 
 ## 自定义扩展
 
-声明同类型 Bean 即可覆盖默认实现：
+声明同类型 Bean 即可覆盖默认实现，包括：
 
-- `LlmClient`
-- `EmbeddingClient`
-- `KnowledgeVectorStore`
-- `QueryRewriteService`
-- `RerankClient`
+- `LlmClient`、`EmbeddingClient`、`KnowledgeVectorStore`
+- `QueryRewriteService`、`RerankClient`
 - `PromptBuilder` 或多个 `PromptCustomizer`
-- `PrivacyFilter`
-- `ScopeResolver`
-- `ScopeClassifier`
-- `CandidateExtractor`
-- `ChunkStrategy`
-- `ReviewCallback`
-- `TransactionRunner`
+- `PrivacyFilter`、`ScopeResolver`、`ScopeClassifier`
+- `CandidateExtractor`、`DuplicateDetector`、`ConflictDetector`
+- `LlmPreReviewer`、`EvidenceVerifier`、`KnowledgeRelationJudge`
+- `ReviewCallback`、`TransactionRunner`
 
-生产环境关闭 `auto-create-collection` 前，应预先创建与配置维度一致的 Milvus
-Collection。Embedding 模型变化时应新建 Collection 或完成全量重建索引。
+生产环境关闭 `auto-create-collection` 前，应预建与配置维度一致的 Milvus Collection。Embedding 模型发生变化时，应新建 Collection 或执行全量重建索引。
