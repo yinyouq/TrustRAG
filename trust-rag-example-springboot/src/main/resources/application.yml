@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: trust-rag-example
+  profiles:
+    active: demo
+  datasource:
+    url: jdbc:h2:mem:trust_rag;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-h2.sql
+
+trust-rag:
+  enabled: true
+  engine:
+    enable-query-rewrite: true
+    enable-rerank: false
+    enable-gap-detection: true
+    default-top-k: 8
+    prompt-max-chunks: 5
+  milvus:
+    enabled: false
+    dimension: 64
+  retrieval:
+    high-trust-top-k: 5
+    low-trust-top-k: 3
+    min-vector-score: 0.10
+  trace:
+    save-prompt: false
+  admin-api:
+    enabled: true
+
+server:
+  port: 8080

@@ -1,0 +1,24 @@
+spring:
+  config:
+    activate:
+      on-profile: milvus
+  datasource:
+    url: jdbc:postgresql://localhost:5432/trust_rag
+    username: trust_rag
+    password: trust_rag
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  sql:
+    init:
+      mode: never
+
+trust-rag:
+  milvus:
+    enabled: true
+    uri: http://localhost:19530
+    database: default
+    collection: trust_rag_knowledge
+    dimension: 64
+    metric-type: COSINE
+    auto-create-collection: true

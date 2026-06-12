@@ -1,0 +1,185 @@
+package io.github.trustrag.core.service;
+
+import io.github.trustrag.core.exception.InvalidKnowledgeStateException;
+import io.github.trustrag.core.exception.KnowledgeNotFoundException;
+import io.github.trustrag.core.exception.TrustRagException;
+import io.github.trustrag.core.model.KnowledgeItem;
+import io.github.trustrag.core.model.KnowledgeStatus;
+import io.github.trustrag.core.model.ReviewRequest;
+import io.github.trustrag.core.model.ReviewStatus;
+import io.github.trustrag.core.model.ReviewTask;
+import io.github.trustrag.core.model.ScopeContext;
+import io.github.trustrag.core.spi.EmbeddingClient;
+import io.github.trustrag.core.spi.KnowledgeRepository;
+import io.github.trustrag.core.spi.KnowledgeVectorStore;
+import io.github.trustrag.core.spi.ReviewCallback;
+import io.github.trustrag.core.spi.ReviewTaskRepository;
+import io.github.trustrag.core.spi.TransactionRunner;
+import io.github.trustrag.core.util.KnowledgeHashes;
+
+import java.time.Clock;
+import java.util.List;
+
+public final class KnowledgeReviewService {
+
+    private static final System.Logger LOGGER = System.getLogger(KnowledgeReviewService.class.getName());
+
+    private final KnowledgeRepository knowledgeRepository;
+    private final ReviewTaskRepository reviewTaskRepository;
+    private final EmbeddingClient embeddingClient;
+    private final KnowledgeVectorStore vectorStore;
+    private final List<ReviewCallback> callbacks;
+    private final TransactionRunner transactionRunner;
+    private final Clock clock;
+
+    public KnowledgeReviewService(
+            KnowledgeRepository knowledgeRepository,
+            ReviewTaskRepository reviewTaskRepository,
+            EmbeddingClient embeddingClient,
+            KnowledgeVectorStore vectorStore,
+            List<ReviewCallback> callbacks,
+            TransactionRunner transactionRunner,
+            Clock clock) {
+        this.knowledgeRepository = knowledgeRepository;
+        this.reviewTaskRepository = reviewTaskRepository;
+        this.embeddingClient = embeddingClient;
+        this.vectorStore = vectorStore;
+        this.callbacks = callbacks == null ? List.of() : List.copyOf(callbacks);
+        this.transactionRunner = transactionRunner;
+        this.clock = clock;
+    }
+
+    public List<KnowledgeItem> findCandidates(KnowledgeStatus status, int limit, int offset) {
+        return findCandidates(status, null, null, limit, offset);
+    }
+
+    public List<KnowledgeItem> findCandidates(
+            KnowledgeStatus status,
+            io.github.trustrag.core.model.TrustLevel trustLevel,
+            io.github.trustrag.core.model.ScopeType scopeType,
+            int limit,
+            int offset) {
+        return knowledgeRepository.findCandidates(
+                status == null ? KnowledgeStatus.PENDING_REVIEW : status,
+                trustLevel,
+                scopeType,
+                Math.min(Math.max(limit, 1), 200),
+                Math.max(offset, 0));
+    }
+
+    public KnowledgeItem approve(long knowledgeId, ReviewRequest request) {
+        validateReviewRequest(request);
+        KnowledgeItem candidate = loadPendingCandidate(knowledgeId);
+        ReviewTask task = loadPendingTask(knowledgeId);
+        ScopeContext context = new ScopeContext(
+                candidate.userId(), candidate.conversationId(), candidate.projectId(), candidate.tenantId());
+        KnowledgeItem indexing = candidate
+                .approve(request.reviewerId(), request.modifiedTitle(), request.modifiedContent(), clock.instant())
+                .withHash(KnowledgeHashes.scopedHash(
+                        request.modifiedContent() == null || request.modifiedContent().isBlank()
+                                ? candidate.content()
+                                : request.modifiedContent(),
+                        candidate.scopeType() == io.github.trustrag.core.model.ScopeType.GLOBAL_CANDIDATE
+                                ? io.github.trustrag.core.model.ScopeType.GLOBAL
+                                : candidate.scopeType(),
+                        context));
+
+        knowledgeRepository.findByHash(indexing.hash())
+                .filter(existing -> !existing.id().equals(candidate.id()))
+                .ifPresent(existing -> {
+                    throw new InvalidKnowledgeStateException(
+                            "Approved content duplicates knowledge item " + existing.id());
+                });
+        if (!knowledgeRepository.updateIfState(indexing, candidate.status(), candidate.version())) {
+            throw new InvalidKnowledgeStateException(
+                    "Knowledge item " + knowledgeId + " was changed by another reviewer");
+        }
+
+        try {
+            List<Float> vector = embeddingClient.embed(indexing.content());
+            if (vector == null || vector.size() != embeddingClient.dimension()) {
+                throw new TrustRagException("Embedding dimension mismatch while approving knowledge " + knowledgeId);
+            }
+            KnowledgeItem enabled = indexing.withIndexState(
+                    KnowledgeStatus.ENABLED,
+                    Long.toString(indexing.id()),
+                    embeddingClient.modelName(),
+                    embeddingClient.dimension(),
+                    clock.instant());
+            vectorStore.upsert(enabled, vector);
+            transactionRunner.required(() -> {
+                knowledgeRepository.update(enabled);
+                reviewTaskRepository.update(task.complete(
+                        ReviewStatus.APPROVED, request.reviewerId(), "approve", request.comment(), clock.instant()));
+            });
+            notifyCallbacks(enabled);
+            return enabled;
+        } catch (Exception exception) {
+            KnowledgeItem failed = indexing.withIndexState(
+                    KnowledgeStatus.INDEX_FAILED,
+                    indexing.embeddingId(),
+                    embeddingClient.modelName(),
+                    embeddingClient.dimension(),
+                    clock.instant());
+            knowledgeRepository.update(failed);
+            throw new TrustRagException("Approval indexing failed for knowledge " + knowledgeId, exception);
+        }
+    }
+
+    public KnowledgeItem reject(long knowledgeId, ReviewRequest request) {
+        validateReviewRequest(request);
+        KnowledgeItem candidate = loadPendingCandidate(knowledgeId);
+        ReviewTask task = loadPendingTask(knowledgeId);
+        KnowledgeItem rejected = candidate.reject(request.comment(), clock.instant());
+        transactionRunner.required(() -> {
+            if (!knowledgeRepository.updateIfState(rejected, candidate.status(), candidate.version())) {
+                throw new InvalidKnowledgeStateException(
+                        "Knowledge item " + knowledgeId + " was changed by another reviewer");
+            }
+            reviewTaskRepository.update(task.complete(
+                    ReviewStatus.REJECTED, request.reviewerId(), "reject", request.comment(), clock.instant()));
+        });
+        try {
+            vectorStore.delete(knowledgeId);
+        } catch (Exception exception) {
+            LOGGER.log(
+                    System.Logger.Level.WARNING,
+                    "Rejected knowledge has a stale vector that is blocked by relational status: " + knowledgeId,
+                    exception);
+        }
+        return rejected;
+    }
+
+    private KnowledgeItem loadPendingCandidate(long knowledgeId) {
+        KnowledgeItem candidate = knowledgeRepository.findById(knowledgeId)
+                .orElseThrow(() -> new KnowledgeNotFoundException(knowledgeId));
+        if (candidate.status() != KnowledgeStatus.PENDING_REVIEW
+                && candidate.status() != KnowledgeStatus.INDEX_FAILED) {
+            throw new InvalidKnowledgeStateException(
+                    "Knowledge item " + knowledgeId + " is not reviewable: " + candidate.status());
+        }
+        return candidate;
+    }
+
+    private ReviewTask loadPendingTask(long knowledgeId) {
+        return reviewTaskRepository.findPendingByKnowledgeId(knowledgeId)
+                .orElseThrow(() -> new InvalidKnowledgeStateException(
+                        "No pending review task for knowledge " + knowledgeId));
+    }
+
+    private void validateReviewRequest(ReviewRequest request) {
+        if (request == null || request.reviewerId() == null || request.reviewerId().isBlank()) {
+            throw new InvalidKnowledgeStateException("reviewerId must not be blank");
+        }
+    }
+
+    private void notifyCallbacks(KnowledgeItem item) {
+        for (ReviewCallback callback : callbacks) {
+            try {
+                callback.onApproved(item);
+            } catch (Exception exception) {
+                LOGGER.log(System.Logger.Level.WARNING, "Review callback failed for knowledge " + item.id(), exception);
+            }
+        }
+    }
+}
