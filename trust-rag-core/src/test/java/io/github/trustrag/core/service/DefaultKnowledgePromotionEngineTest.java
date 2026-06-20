@@ -45,6 +45,7 @@ class DefaultKnowledgePromotionEngineTest {
         var result = fixture.engine.evaluate(candidate.id());
 
         assertThat(result.action()).isEqualTo(PromotionAction.PROMOTE_TO_MEDIUM);
+        assertThat(result.targetStatus()).isEqualTo(KnowledgeStatus.MEDIUM_ENABLED);
         assertThat(result.promotionScore()).isGreaterThanOrEqualTo(0.75);
 
         fixture.engine.promoteToMedium(candidate.id(), result);
@@ -54,6 +55,12 @@ class DefaultKnowledgePromotionEngineTest {
         assertThat(promoted.status()).isEqualTo(KnowledgeStatus.HUMAN_REVIEW_PENDING);
         assertThat(fixture.reviewRepository.pending).isNotNull();
         assertThat(fixture.vectorStore.upserted).isEqualTo(promoted.id());
+        assertThat(fixture.lineageRepository.values)
+                .extracting(KnowledgeLineage::action)
+                .containsExactly(
+                        "PROMOTION_STARTED",
+                        "LOW_TO_MEDIUM_PROMOTED",
+                        "HUMAN_REVIEW_QUEUED");
     }
 
     @Test
@@ -68,14 +75,26 @@ class DefaultKnowledgePromotionEngineTest {
         assertThat(result.privacyRisk()).isEqualTo(0.90);
     }
 
+    @Test
+    void persistedPrivacyRiskSurvivesSanitizationAndBlocksPromotion() {
+        Fixture fixture = fixture(PrivacyResult::allowed);
+        KnowledgeItem candidate = fixture.repository.save(candidate(3L, 0.90));
+
+        var result = fixture.engine.evaluate(candidate.id());
+
+        assertThat(result.action()).isEqualTo(PromotionAction.REJECT);
+        assertThat(result.privacyRisk()).isEqualTo(0.90);
+    }
+
     private Fixture fixture(io.github.trustrag.core.spi.PrivacyFilter privacyFilter) {
         TestKnowledgeRepository repository = new TestKnowledgeRepository();
         TestReviewRepository reviewRepository = new TestReviewRepository();
+        TestLineageRepository lineageRepository = new TestLineageRepository();
         TestVectorStore vectorStore = new TestVectorStore();
         DefaultKnowledgePromotionEngine engine = new DefaultKnowledgePromotionEngine(
                 repository,
                 reviewRepository,
-                new TestLineageRepository(),
+                lineageRepository,
                 embeddingClient(),
                 vectorStore,
                 privacyFilter,
@@ -91,7 +110,7 @@ class DefaultKnowledgePromotionEngineTest {
                 new KnowledgeStateMachine(),
                 TransactionRunner.direct(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
-        return new Fixture(repository, reviewRepository, vectorStore, engine);
+        return new Fixture(repository, reviewRepository, lineageRepository, vectorStore, engine);
     }
 
     private EmbeddingClient embeddingClient() {
@@ -114,9 +133,13 @@ class DefaultKnowledgePromotionEngineTest {
     }
 
     private KnowledgeItem candidate(long id) {
+        return candidate(id, 0.0);
+    }
+
+    private KnowledgeItem candidate(long id, double privacyRisk) {
         KnowledgeGovernance governance = new KnowledgeGovernance(
                 null, null, null, null, null, null, null, null, null, null, null,
-                0.0, 0.0, 0.0, null, null, null, null, null,
+                privacyRisk, 0.0, 0.0, null, null, null, null, null,
                 5, 1, 0, List.of(), null, null);
         return new KnowledgeItem(
                 id, "candidate", "verified claim", "verified content",
@@ -124,13 +147,14 @@ class DefaultKnowledgePromotionEngineTest {
                 ScopeType.GLOBAL_CANDIDATE, null, null, null, null,
                 "official", "https://example.invalid/source",
                 "Evidence independently confirms this claim and its applicability.",
-                null, null, null, 0.95, 0.0, 1, "hash-" + id,
+                null, null, null, 0.95, privacyRisk, 1, "hash-" + id,
                 null, null, null, NOW, NOW, null, governance);
     }
 
     private record Fixture(
             TestKnowledgeRepository repository,
             TestReviewRepository reviewRepository,
+            TestLineageRepository lineageRepository,
             TestVectorStore vectorStore,
             DefaultKnowledgePromotionEngine engine) {
     }

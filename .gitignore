@@ -3,6 +3,14 @@ target/
 **/target/
 .mvn-local/
 
+# Node.js frontend output
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.vite/
+coverage/
+
 # IntelliJ IDEA
 .idea/
 *.iml

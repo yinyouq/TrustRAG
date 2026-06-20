@@ -36,7 +36,8 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
             llm_score, source_score, evidence_score, feedback_score, usage_score, general_value_score,
             privacy_risk, conflict_risk, stale_risk, applicable_version, valid_from, valid_to,
             source_time, last_verified_at, usage_count, positive_feedback_count,
-            negative_feedback_count, tags_json, previous_trust_level, previous_status
+            negative_feedback_count, tags_json, previous_trust_level, previous_status,
+            source_title, source_url, page_number, section_path, document_id, chunk_index
             """;
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -63,7 +64,8 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
                 + ":llmScore, :sourceScore, :evidenceScore, :feedbackScore, :usageScore, :generalValueScore,"
                 + ":privacyRisk, :conflictRisk, :staleRisk, :applicableVersion, :validFrom, :validTo,"
                 + ":sourceTime, :lastVerifiedAt, :usageCount, :positiveFeedbackCount,"
-                + ":negativeFeedbackCount, :tagsJson, :previousTrustLevel, :previousStatus)";
+                + ":negativeFeedbackCount, :tagsJson, :previousTrustLevel, :previousStatus,"
+                + ":sourceTitle, :sourceUrl, :pageNumber, :sectionPath, :documentId, :chunkIndex)";
         KeyHolder keys = new GeneratedKeyHolder();
         jdbc.update(sql, parameters(knowledge), keys, new String[]{"id"});
         Number key = keys.getKey();
@@ -179,7 +181,7 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
         return jdbc.query("""
                         SELECT * FROM knowledge_item
                         WHERE trust_level='LOW'
-                          AND status IN ('LOW_PENDING', 'LOW_ENABLED', 'PROMOTION_PENDING', 'INDEX_FAILED')
+                          AND status IN ('LOW_PENDING', 'LOW_ENABLED', 'PROMOTION_PENDING')
                         ORDER BY created_at ASC
                         LIMIT :limit
                         """,
@@ -267,7 +269,9 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
                     source_time=:sourceTime, last_verified_at=:lastVerifiedAt,
                     usage_count=:usageCount, positive_feedback_count=:positiveFeedbackCount,
                     negative_feedback_count=:negativeFeedbackCount, tags_json=:tagsJson,
-                    previous_trust_level=:previousTrustLevel, previous_status=:previousStatus
+                    previous_trust_level=:previousTrustLevel, previous_status=:previousStatus,
+                    source_title=:sourceTitle, source_url=:sourceUrl, page_number=:pageNumber,
+                    section_path=:sectionPath, document_id=:documentId, chunk_index=:chunkIndex
                 """ + whereClause;
     }
 
@@ -331,7 +335,13 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
                 .addValue("negativeFeedbackCount", governance.negativeFeedbackCount())
                 .addValue("tagsJson", json(governance.tags()))
                 .addValue("previousTrustLevel", enumName(governance.previousTrustLevel()))
-                .addValue("previousStatus", enumName(governance.previousStatus()));
+                .addValue("previousStatus", enumName(governance.previousStatus()))
+                .addValue("sourceTitle", value.sourceMetadata().sourceTitle())
+                .addValue("sourceUrl", value.sourceMetadata().sourceUrl())
+                .addValue("pageNumber", value.sourceMetadata().pageNumber())
+                .addValue("sectionPath", value.sourceMetadata().sectionPath())
+                .addValue("documentId", value.sourceMetadata().documentId())
+                .addValue("chunkIndex", value.sourceMetadata().chunkIndex());
     }
 
     private KnowledgeItem mapRow(ResultSet rs, int rowNum) throws SQLException {
@@ -390,7 +400,14 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
                         rs.getInt("negative_feedback_count"),
                         tags(rs.getString("tags_json")),
                         enumValue(TrustLevel.class, rs.getString("previous_trust_level")),
-                        enumValue(KnowledgeStatus.class, rs.getString("previous_status"))));
+                        enumValue(KnowledgeStatus.class, rs.getString("previous_status"))),
+                new io.github.trustrag.core.model.KnowledgeSourceMetadata(
+                        rs.getString("source_title"),
+                        rs.getString("source_url"),
+                        nullableInteger(rs, "page_number"),
+                        rs.getString("section_path"),
+                        rs.getString("document_id"),
+                        nullableInteger(rs, "chunk_index")));
     }
 
     private static Integer nullableInteger(ResultSet rs, String column) throws SQLException {

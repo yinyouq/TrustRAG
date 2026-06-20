@@ -76,7 +76,10 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
             scope = narrowestPrivateScope(context);
         }
         CandidateKnowledge candidate = candidateExtractor.extractCorrection(
-                sanitized, correctionPrivacy.sanitizedContent(), scope);
+                sanitized, correctionPrivacy.sanitizedContent(), scope)
+                .withPrivacyRisk(Math.max(
+                        correctionPrivacy.allowed() ? 0.0 : Math.max(0.80, correctionPrivacy.riskScore()),
+                        feedbackPrivacy.allowed() ? 0.0 : Math.max(0.80, feedbackPrivacy.riskScore())));
         return transactionRunner.required(() -> {
             feedbackRepository.save(sanitized);
             updateFeedbackCounters(request);

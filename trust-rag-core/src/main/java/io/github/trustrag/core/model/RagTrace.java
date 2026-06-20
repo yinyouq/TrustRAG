@@ -15,6 +15,9 @@ public final class RagTrace {
     private final String projectId;
     private final String tenantId;
     private final String originalQuestion;
+    private final TraceType traceType;
+    private final Long evalRunId;
+    private final Long evalCaseId;
     private List<String> rewrittenQueries = List.of();
     private List<RetrievedChunk> retrievedChunks = List.of();
     private List<RetrievedChunk> rerankedChunks = List.of();
@@ -37,6 +40,9 @@ public final class RagTrace {
         this.projectId = request.projectId();
         this.tenantId = request.tenantId();
         this.originalQuestion = request.question();
+        this.traceType = request.isEvaluationMode() ? TraceType.EVAL : TraceType.NORMAL;
+        this.evalRunId = request.evalRunId();
+        this.evalCaseId = request.evalCaseId();
     }
 
     public static RagTrace start(RagRequest request, Instant now) {
@@ -135,6 +141,18 @@ public final class RagTrace {
 
     public String originalQuestion() {
         return originalQuestion;
+    }
+
+    public TraceType traceType() {
+        return traceType;
+    }
+
+    public Long evalRunId() {
+        return evalRunId;
+    }
+
+    public Long evalCaseId() {
+        return evalCaseId;
     }
 
     public List<String> rewrittenQueries() {

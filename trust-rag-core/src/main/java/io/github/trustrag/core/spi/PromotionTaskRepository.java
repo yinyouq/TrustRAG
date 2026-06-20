@@ -19,6 +19,11 @@ public interface PromotionTaskRepository {
 
     List<PromotionTask> findRunnable(int retryLimit, int limit);
 
+    List<PromotionTask> findRunnableByType(
+            PromotionTaskType taskType,
+            int retryLimit,
+            int limit);
+
     List<PromotionTask> find(
             PromotionTaskStatus status,
             PromotionTaskType taskType,

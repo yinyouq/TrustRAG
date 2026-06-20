@@ -10,8 +10,17 @@ import io.github.trustrag.core.spi.ConflictRecordRepository;
 import io.github.trustrag.core.spi.KnowledgeLifecycleManager;
 import io.github.trustrag.core.spi.KnowledgeRepository;
 import io.github.trustrag.core.spi.PrivacyFilter;
+import io.github.trustrag.document.DocumentImportService;
+import io.github.trustrag.evaluation.EvalCaseService;
+import io.github.trustrag.evaluation.EvalCaseCsvImportService;
+import io.github.trustrag.evaluation.EvalDatasetService;
+import io.github.trustrag.evaluation.EvalReportService;
+import io.github.trustrag.evaluation.EvalRunService;
+import io.github.trustrag.evaluation.EvaluationRepository;
+import io.github.trustrag.evaluation.GovernanceMetricService;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
@@ -36,6 +45,43 @@ public class TrustRagAdminAutoConfiguration {
             PrivacyFilter privacyFilter) {
         return new TrustRagKnowledgeController(
                 reviewService, ingestionService, candidateService, privacyFilter);
+    }
+
+    @Bean
+    @ConditionalOnBean(DocumentImportService.class)
+    TrustRagDocumentController trustRagDocumentController(DocumentImportService service) {
+        return new TrustRagDocumentController(service);
+    }
+
+    @Bean
+    @ConditionalOnBean({EvalDatasetService.class, EvalCaseService.class})
+    @ConditionalOnMissingBean
+    EvalCaseCsvImportService evalCaseCsvImportService(
+            EvalDatasetService datasetService,
+            EvalCaseService caseService) {
+        return new EvalCaseCsvImportService(datasetService, caseService);
+    }
+
+    @Bean
+    @ConditionalOnBean({
+            EvalDatasetService.class,
+            EvalCaseService.class,
+            EvalCaseCsvImportService.class,
+            EvalRunService.class,
+            EvalReportService.class,
+            GovernanceMetricService.class,
+            EvaluationRepository.class})
+    TrustRagEvaluationController trustRagEvaluationController(
+            EvalDatasetService datasetService,
+            EvalCaseService caseService,
+            EvalCaseCsvImportService csvImportService,
+            EvalRunService runService,
+            EvalReportService reportService,
+            GovernanceMetricService governanceService,
+            EvaluationRepository repository) {
+        return new TrustRagEvaluationController(
+                datasetService, caseService, csvImportService, runService, reportService,
+                governanceService, repository);
     }
 
     @Bean

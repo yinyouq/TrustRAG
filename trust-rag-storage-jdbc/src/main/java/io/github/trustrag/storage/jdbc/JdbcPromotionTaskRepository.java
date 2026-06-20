@@ -106,6 +106,26 @@ public final class JdbcPromotionTaskRepository implements PromotionTaskRepositor
     }
 
     @Override
+    public List<PromotionTask> findRunnableByType(
+            PromotionTaskType taskType,
+            int retryLimit,
+            int limit) {
+        return jdbc.query("""
+                        SELECT * FROM promotion_task
+                        WHERE task_type=:taskType
+                          AND (status='PENDING'
+                            OR (status='FAILED' AND retry_count<:retryLimit))
+                        ORDER BY created_at ASC
+                        LIMIT :limit
+                        """,
+                Map.of(
+                        "taskType", taskType.name(),
+                        "retryLimit", retryLimit,
+                        "limit", limit),
+                rowMapper);
+    }
+
+    @Override
     public List<PromotionTask> find(
             PromotionTaskStatus status,
             PromotionTaskType taskType,

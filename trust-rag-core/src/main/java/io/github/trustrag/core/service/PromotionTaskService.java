@@ -5,7 +5,9 @@ import io.github.trustrag.core.model.KnowledgeStatus;
 import io.github.trustrag.core.model.PromotionTask;
 import io.github.trustrag.core.model.PromotionTaskStatus;
 import io.github.trustrag.core.model.PromotionTaskType;
+import io.github.trustrag.core.model.KnowledgeLineage;
 import io.github.trustrag.core.spi.KnowledgeRepository;
+import io.github.trustrag.core.spi.KnowledgeLineageRepository;
 import io.github.trustrag.core.spi.PromotionTaskRepository;
 import io.github.trustrag.core.spi.TransactionRunner;
 
@@ -16,6 +18,7 @@ public final class PromotionTaskService {
 
     private final KnowledgeRepository knowledgeRepository;
     private final PromotionTaskRepository taskRepository;
+    private final KnowledgeLineageRepository lineageRepository;
     private final KnowledgeStateMachine stateMachine;
     private final TransactionRunner transactionRunner;
     private final Clock clock;
@@ -23,11 +26,13 @@ public final class PromotionTaskService {
     public PromotionTaskService(
             KnowledgeRepository knowledgeRepository,
             PromotionTaskRepository taskRepository,
+            KnowledgeLineageRepository lineageRepository,
             KnowledgeStateMachine stateMachine,
             TransactionRunner transactionRunner,
             Clock clock) {
         this.knowledgeRepository = knowledgeRepository;
         this.taskRepository = taskRepository;
+        this.lineageRepository = lineageRepository;
         this.stateMachine = stateMachine;
         this.transactionRunner = transactionRunner;
         this.clock = clock;
@@ -40,19 +45,32 @@ public final class PromotionTaskService {
                     item.id(), PromotionTaskType.LOW_TO_MEDIUM).isPresent()) {
                 continue;
             }
-            transactionRunner.required(() -> {
+            boolean taskCreated = transactionRunner.required(() -> {
                 KnowledgeItem current = knowledgeRepository.findById(item.id()).orElseThrow();
+                if (taskRepository.findActiveByKnowledgeId(
+                        current.id(), PromotionTaskType.LOW_TO_MEDIUM).isPresent()) {
+                    return false;
+                }
                 if (current.status() == KnowledgeStatus.LOW_ENABLED
                         || current.status() == KnowledgeStatus.LOW_PENDING) {
                     stateMachine.validate(current.status(), KnowledgeStatus.PROMOTION_PENDING);
                     KnowledgeItem pending = current.withStatus(
                             KnowledgeStatus.PROMOTION_PENDING, clock.instant());
-                    knowledgeRepository.updateIfState(pending, current.status(), current.version());
+                    if (!knowledgeRepository.updateIfState(
+                            pending, current.status(), current.version())) {
+                        throw new IllegalStateException(
+                                "Knowledge changed while queuing promotion: " + current.id());
+                    }
                 }
                 taskRepository.save(PromotionTask.pending(
                         item.id(), PromotionTaskType.LOW_TO_MEDIUM, clock.instant()));
+                lineageRepository.save(KnowledgeLineage.system(
+                        item.id(), "PROMOTION_QUEUED", clock.instant()));
+                return true;
             });
-            created++;
+            if (taskCreated) {
+                created++;
+            }
         }
         return created;
     }

@@ -29,6 +29,7 @@ public final class DefaultCandidateExtractor implements CandidateExtractor {
                 TrustLevel.LOW,
                 KnowledgeStatus.LOW_PENDING,
                 0.70,
+                0.0,
                 List.of("user-correction"));
     }
 }

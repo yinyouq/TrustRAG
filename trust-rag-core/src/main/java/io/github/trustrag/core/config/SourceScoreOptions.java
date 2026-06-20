@@ -7,6 +7,12 @@ public record SourceScoreOptions(Map<String, Double> scores) {
 
     public SourceScoreOptions {
         scores = scores == null ? Map.of() : Map.copyOf(scores);
+        scores.forEach((name, score) -> {
+            if (score == null || score < 0.0 || score > 1.0) {
+                throw new IllegalArgumentException(
+                        "Source score must be between 0 and 1: " + name);
+            }
+        });
     }
 
     public double score(String sourceType) {

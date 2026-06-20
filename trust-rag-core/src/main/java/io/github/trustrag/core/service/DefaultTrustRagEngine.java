@@ -77,6 +77,7 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
         Instant startedAt = clock.instant();
         long startedNanos = System.nanoTime();
         RagTrace trace = RagTrace.start(request, startedAt);
+        boolean evaluationMode = request.isEvaluationMode();
 
         try {
             List<String> queries = enabled(request.enableQueryRewrite(), options.queryRewriteEnabled())
@@ -117,16 +118,26 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
             trace.complete(response, GapDetectionResult.noGap(), elapsed(startedNanos));
 
             GapDetectionResult gap = GapDetectionResult.noGap();
-            if (enabled(request.enableGapDetection(), options.gapDetectionEnabled())) {
+            if (!evaluationMode && enabled(request.enableGapDetection(), options.gapDetectionEnabled())) {
                 try {
                     gap = gapDetector.detect(trace);
+                    if (!enabled(
+                            request.enableCandidateExtraction(),
+                            options.candidateExtractionEnabled())
+                            && gap.shouldExtractCandidate()) {
+                        gap = new GapDetectionResult(
+                                gap.hasGap(), gap.gapScore(), gap.gapTypes(), gap.reason(),
+                                false, gap.shouldCreateReviewTask());
+                    }
                 } catch (Exception exception) {
                     LOGGER.log(System.Logger.Level.ERROR, "Knowledge gap detection failed for trace " + trace.traceId(), exception);
                 }
             }
             trace.complete(response, gap, elapsed(startedNanos));
             safeRecord(trace);
-            recordUsage(used);
+            if (!evaluationMode) {
+                recordUsage(used);
+            }
             return toAnswer(trace);
         } catch (RuntimeException exception) {
             trace.fail(exception, elapsed(startedNanos));
@@ -147,6 +158,10 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
         }
         Map<Long, RetrievedChunk> originals = new HashMap<>();
         original.forEach(chunk -> originals.put(chunk.knowledgeId(), chunk));
+        double maxRrfScore = original.stream()
+                .mapToDouble(RetrievedChunk::rrfScore)
+                .max()
+                .orElse(0.0);
         return reranked.stream()
                 .filter(candidate -> originals.containsKey(candidate.knowledgeId()))
                 .map(candidate -> {
@@ -154,12 +169,14 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
                     double rerankScore = candidate.rerankScore() == null
                             ? candidate.finalScore()
                             : candidate.rerankScore();
-                    double finalScore = 0.65 * rerankScore + 0.35 * trusted.trustScore();
+                    double normalizedRrf = maxRrfScore <= 0.0
+                            ? trusted.finalScore()
+                            : trusted.rrfScore() / maxRrfScore;
+                    double finalScore = 0.70 * rerankScore + 0.30 * normalizedRrf;
                     return trusted.withRerankScore(rerankScore, finalScore);
                 })
-                .sorted(Comparator
-                        .comparing((RetrievedChunk value) -> value.trustLevel().ordinal())
-                        .thenComparing(RetrievedChunk::finalScore, Comparator.reverseOrder()))
+                .sorted(Comparator.comparing(
+                        RetrievedChunk::finalScore, Comparator.reverseOrder()))
                 .toList();
     }
 

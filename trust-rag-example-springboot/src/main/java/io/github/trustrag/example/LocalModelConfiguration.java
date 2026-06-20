@@ -143,6 +143,8 @@ public class LocalModelConfiguration {
             return entries.values().stream()
                     .filter(entry -> request.statuses().contains(entry.knowledge().status()))
                     .filter(entry -> request.trustLevels().contains(entry.knowledge().trustLevel()))
+                    .filter(entry -> request.scopeTypes().isEmpty()
+                            || request.scopeTypes().contains(entry.knowledge().scopeType()))
                     .filter(entry -> entry.knowledge().trustLevel() != TrustLevel.LOW
                             || entry.knowledge().scopeType()
                             != io.github.trustrag.core.model.ScopeType.GLOBAL)

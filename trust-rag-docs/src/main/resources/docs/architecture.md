@@ -12,10 +12,10 @@ TrustRAG 是一个完整的可信 RAG 框架，覆盖查询改写、向量检索
 RagRequest
   -> QueryRewriteService
   -> ScopeResolver
-  -> EmbeddingClient
-  -> HIGH / MEDIUM / LOW 分层向量检索
+  -> Milvus 向量召回 + OpenSearch BM25 召回（并发）
+  -> RRF(k=60) 融合
   -> 关系库状态与作用域二次校验
-  -> 可信排序与可选 Rerank
+  -> 可信度乘法微调与可选 Rerank
   -> PromptBuilder
   -> LlmClient
   -> RagTrace + RetrievalLog
@@ -23,7 +23,9 @@ RagRequest
   -> RagAnswer
 ```
 
-默认排序优先级为高池、中池、低池。同一层内按向量分数和可信权重计算最终分数。
+默认不再按高池、中池、低池做硬分层排序。向量和关键词排名先按 RRF 融合，再分别乘以高、中、低可信度系数 `1.0 / 0.92 / 0.80`，既保留相关性主导，也让可信知识获得稳定优势。启用 Rerank 后，最终分数为 `0.70 * rerank + 0.30 * normalizedRrf`。
+
+任一检索引擎故障时保留另一条召回链路；两路都故障时返回空上下文，由知识缺口检测和保守 Prompt 约束模型回答。
 
 ## 三类知识池
 
@@ -44,6 +46,7 @@ LOW_PENDING / LOW_ENABLED
   -> 来源评分与证据验证
   -> 高池/中池冲突检测
   -> 晋升评分
+  -> MEDIUM_ENABLED
   -> HUMAN_REVIEW_PENDING (MEDIUM)
   -> INDEXING
   -> HIGH_ENABLED
@@ -74,7 +77,7 @@ LOW_PENDING / LOW_ENABLED
 
 `StructuredLlmPreReviewer` 要求模型只返回 JSON，字段包括质量分、通用价值、证据充分度、风险、建议动作、规范化声明和标签。`StructuredKnowledgeRelationJudge` 要求返回 `SUPPORT`、`CONFLICT`、`VERSION_DIFF` 或 `UNRELATED`。
 
-JSON 解析失败时采用保守结果，不会自动晋升。
+JSON 解析失败会让当前晋升任务失败并恢复为 `PROMOTION_PENDING`，随后按任务重试上限重新执行，不会把格式错误误判成有效预审。
 
 最终回答 Prompt 明确要求：
 
@@ -100,6 +103,7 @@ JSON 解析失败时采用保守结果，不会自动晋升。
 - 关系库是知识状态的权威来源。
 - 关键状态更新使用 `status + version` 乐观锁。
 - 晋升任务使用原子 claim，支持失败重试。
+- 索引补偿使用独立的 `INDEX_RETRY` 任务，并保留原计划恢复的目标状态。
 - Milvus 不参与关系库事务；残留向量会被关系库二次校验阻断。
 - 隐私过滤、作用域过滤和 Prompt 注入防护默认启用。
 - 所有晋升、审批、降级、回滚和合并写入 `knowledge_lineage`。

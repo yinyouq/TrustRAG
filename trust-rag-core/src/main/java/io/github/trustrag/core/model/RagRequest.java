@@ -16,6 +16,9 @@ public final class RagRequest {
     private final Boolean enableRerank;
     private final Boolean enableGapDetection;
     private final Boolean enableCandidateExtraction;
+    private final Boolean evaluationMode;
+    private final Long evalRunId;
+    private final Long evalCaseId;
     private final Integer topK;
     private final Double minScore;
     private final String systemPrompt;
@@ -31,6 +34,9 @@ public final class RagRequest {
         this.enableRerank = builder.enableRerank;
         this.enableGapDetection = builder.enableGapDetection;
         this.enableCandidateExtraction = builder.enableCandidateExtraction;
+        this.evaluationMode = builder.evaluationMode;
+        this.evalRunId = builder.evalRunId;
+        this.evalCaseId = builder.evalCaseId;
         this.topK = builder.topK;
         this.minScore = builder.minScore;
         this.systemPrompt = builder.systemPrompt;
@@ -80,6 +86,22 @@ public final class RagRequest {
         return enableCandidateExtraction;
     }
 
+    public Boolean evaluationMode() {
+        return evaluationMode;
+    }
+
+    public boolean isEvaluationMode() {
+        return Boolean.TRUE.equals(evaluationMode);
+    }
+
+    public Long evalRunId() {
+        return evalRunId;
+    }
+
+    public Long evalCaseId() {
+        return evalCaseId;
+    }
+
     public Integer topK() {
         return topK;
     }
@@ -103,6 +125,9 @@ public final class RagRequest {
         private Boolean enableRerank;
         private Boolean enableGapDetection;
         private Boolean enableCandidateExtraction;
+        private Boolean evaluationMode;
+        private Long evalRunId;
+        private Long evalCaseId;
         private Integer topK;
         private Double minScore;
         private String systemPrompt;
@@ -154,6 +179,21 @@ public final class RagRequest {
 
         public Builder enableCandidateExtraction(Boolean value) {
             this.enableCandidateExtraction = value;
+            return this;
+        }
+
+        public Builder evaluationMode(Boolean value) {
+            this.evaluationMode = value;
+            return this;
+        }
+
+        public Builder evalRunId(Long evalRunId) {
+            this.evalRunId = evalRunId;
+            return this;
+        }
+
+        public Builder evalCaseId(Long evalCaseId) {
+            this.evalCaseId = evalCaseId;
             return this;
         }
 

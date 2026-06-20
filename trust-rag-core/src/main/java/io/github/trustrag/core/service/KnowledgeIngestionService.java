@@ -1,6 +1,7 @@
 package io.github.trustrag.core.service;
 
 import io.github.trustrag.core.exception.InvalidRagRequestException;
+import io.github.trustrag.core.exception.InvalidKnowledgeStateException;
 import io.github.trustrag.core.exception.KnowledgeNotFoundException;
 import io.github.trustrag.core.exception.TrustRagException;
 import io.github.trustrag.core.model.KnowledgeImportRequest;
@@ -11,10 +12,13 @@ import io.github.trustrag.core.model.ScopeContext;
 import io.github.trustrag.core.model.ScopeType;
 import io.github.trustrag.core.model.TrustLevel;
 import io.github.trustrag.core.model.ReviewTask;
+import io.github.trustrag.core.model.KnowledgeLineage;
 import io.github.trustrag.core.config.LifecycleOptions;
 import io.github.trustrag.core.spi.ChunkStrategy;
 import io.github.trustrag.core.spi.EmbeddingClient;
 import io.github.trustrag.core.spi.KnowledgeRepository;
+import io.github.trustrag.core.spi.KnowledgeLineageRepository;
+import io.github.trustrag.core.spi.KnowledgeIndexService;
 import io.github.trustrag.core.spi.KnowledgeVectorStore;
 import io.github.trustrag.core.spi.ReviewTaskRepository;
 import io.github.trustrag.core.spi.TransactionRunner;
@@ -30,8 +34,9 @@ public final class KnowledgeIngestionService {
 
     private final ChunkStrategy chunkStrategy;
     private final EmbeddingClient embeddingClient;
-    private final KnowledgeVectorStore vectorStore;
+    private final KnowledgeIndexService indexService;
     private final KnowledgeRepository knowledgeRepository;
+    private final KnowledgeLineageRepository lineageRepository;
     private final KnowledgeVisibilityPolicy visibilityPolicy;
     private final ReviewTaskRepository reviewTaskRepository;
     private final TransactionRunner transactionRunner;
@@ -43,6 +48,24 @@ public final class KnowledgeIngestionService {
             EmbeddingClient embeddingClient,
             KnowledgeVectorStore vectorStore,
             KnowledgeRepository knowledgeRepository,
+            KnowledgeLineageRepository lineageRepository,
+            KnowledgeVisibilityPolicy visibilityPolicy,
+            ReviewTaskRepository reviewTaskRepository,
+            TransactionRunner transactionRunner,
+            LifecycleOptions lifecycleOptions,
+            Clock clock) {
+        this(
+                chunkStrategy, embeddingClient, new VectorOnlyKnowledgeIndexService(vectorStore),
+                knowledgeRepository, lineageRepository, visibilityPolicy, reviewTaskRepository,
+                transactionRunner, lifecycleOptions, clock);
+    }
+
+    public KnowledgeIngestionService(
+            ChunkStrategy chunkStrategy,
+            EmbeddingClient embeddingClient,
+            KnowledgeIndexService indexService,
+            KnowledgeRepository knowledgeRepository,
+            KnowledgeLineageRepository lineageRepository,
             KnowledgeVisibilityPolicy visibilityPolicy,
             ReviewTaskRepository reviewTaskRepository,
             TransactionRunner transactionRunner,
@@ -50,8 +73,9 @@ public final class KnowledgeIngestionService {
             Clock clock) {
         this.chunkStrategy = chunkStrategy;
         this.embeddingClient = embeddingClient;
-        this.vectorStore = vectorStore;
+        this.indexService = indexService;
         this.knowledgeRepository = knowledgeRepository;
+        this.lineageRepository = lineageRepository;
         this.visibilityPolicy = visibilityPolicy;
         this.reviewTaskRepository = reviewTaskRepository;
         this.transactionRunner = transactionRunner;
@@ -88,12 +112,19 @@ public final class KnowledgeIngestionService {
                     request.userId(), request.conversationId(), request.projectId(), request.tenantId(),
                     request.sourceType(), request.sourceRef(), request.sourceRef(),
                     null, null, null, 1.0, 0.0, 1, hash,
-                    null, null, null, now, now, expiry(trustLevel, now));
+                    null, null, null, now, now, expiry(trustLevel, now),
+                    io.github.trustrag.core.model.KnowledgeGovernance.empty(),
+                    request.sourceMetadata().withChunkIndex(index));
             visibilityPolicy.validateOwnership(item);
 
             KnowledgeItem saved;
             try {
-                saved = knowledgeRepository.save(item);
+                saved = transactionRunner.required(() -> {
+                    KnowledgeItem created = knowledgeRepository.save(item);
+                    lineageRepository.save(KnowledgeLineage.system(
+                            created.id(), "KNOWLEDGE_IMPORTED", clock.instant()));
+                    return created;
+                });
                 index(saved);
                 ids.add(saved.id());
             } catch (Exception exception) {
@@ -113,26 +144,19 @@ public final class KnowledgeIngestionService {
     }
 
     private KnowledgeItem index(KnowledgeItem item) {
+        KnowledgeItem enabled;
         try {
             List<Float> vector = embeddingClient.embed(item.content());
             if (vector == null || vector.size() != embeddingClient.dimension()) {
                 throw new TrustRagException("Embedding dimension mismatch while indexing knowledge " + item.id());
             }
-            KnowledgeItem enabled = item.withIndexState(
+            enabled = item.withIndexState(
                     enabledStatus(item.trustLevel()),
                     Long.toString(item.id()),
                     embeddingClient.modelName(),
                     embeddingClient.dimension(),
                     clock.instant());
-            vectorStore.upsert(enabled, vector);
-            transactionRunner.required(() -> {
-                knowledgeRepository.update(enabled);
-                if (enabled.status() == KnowledgeStatus.HUMAN_REVIEW_PENDING
-                        && reviewTaskRepository.findPendingByKnowledgeId(enabled.id()).isEmpty()) {
-                    reviewTaskRepository.save(ReviewTask.pending(enabled.id(), clock.instant()));
-                }
-            });
-            return enabled;
+            indexService.upsert(enabled, vector);
         } catch (Exception exception) {
             KnowledgeItem failed = item.withIndexState(
                     KnowledgeStatus.INDEX_FAILED,
@@ -140,9 +164,28 @@ public final class KnowledgeIngestionService {
                     embeddingClient.modelName(),
                     embeddingClient.dimension(),
                     clock.instant());
-            knowledgeRepository.update(failed);
+            if (knowledgeRepository.updateIfState(
+                    failed, item.status(), item.version())) {
+                lineageRepository.save(KnowledgeLineage.system(
+                        item.id(), "KNOWLEDGE_INDEX_FAILED", clock.instant()));
+            }
             throw new TrustRagException("Knowledge indexing failed for id " + item.id(), exception);
         }
+        KnowledgeItem indexed = enabled;
+        transactionRunner.required(() -> {
+            if (!knowledgeRepository.updateIfState(
+                    indexed, item.status(), item.version())) {
+                throw new InvalidKnowledgeStateException(
+                        "Knowledge changed while indexing: " + item.id());
+            }
+            if (indexed.status() == KnowledgeStatus.HUMAN_REVIEW_PENDING
+                    && reviewTaskRepository.findPendingByKnowledgeId(indexed.id()).isEmpty()) {
+                reviewTaskRepository.save(ReviewTask.pending(indexed.id(), clock.instant()));
+            }
+            lineageRepository.save(KnowledgeLineage.system(
+                    indexed.id(), "KNOWLEDGE_INDEXED", clock.instant()));
+        });
+        return indexed;
     }
 
     private void validate(KnowledgeImportRequest request) {

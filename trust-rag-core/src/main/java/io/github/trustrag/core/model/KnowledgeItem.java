@@ -32,7 +32,8 @@ public record KnowledgeItem(
         Instant createdAt,
         Instant updatedAt,
         Instant expiresAt,
-        KnowledgeGovernance governance) {
+        KnowledgeGovernance governance,
+        KnowledgeSourceMetadata sourceMetadata) {
 
     public KnowledgeItem(
             Long id,
@@ -69,11 +70,53 @@ public record KnowledgeItem(
                 userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
                 embeddingId, embeddingModel, embeddingDimension, confidence, privacyScore,
                 version, hash, approvedBy, approvedAt, rejectReason, createdAt, updatedAt,
-                expiresAt, KnowledgeGovernance.empty());
+                expiresAt, KnowledgeGovernance.empty(), KnowledgeSourceMetadata.empty());
+    }
+
+    public KnowledgeItem(
+            Long id,
+            String title,
+            String claim,
+            String content,
+            String summary,
+            String knowledgeType,
+            TrustLevel trustLevel,
+            KnowledgeStatus status,
+            ScopeType scopeType,
+            String userId,
+            String conversationId,
+            String projectId,
+            String tenantId,
+            String sourceType,
+            String sourceRef,
+            String evidence,
+            String embeddingId,
+            String embeddingModel,
+            Integer embeddingDimension,
+            Double confidence,
+            Double privacyScore,
+            int version,
+            String hash,
+            String approvedBy,
+            Instant approvedAt,
+            String rejectReason,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant expiresAt,
+            KnowledgeGovernance governance) {
+        this(
+                id, title, claim, content, summary, knowledgeType, trustLevel, status, scopeType,
+                userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
+                embeddingId, embeddingModel, embeddingDimension, confidence, privacyScore,
+                version, hash, approvedBy, approvedAt, rejectReason, createdAt, updatedAt,
+                expiresAt, governance, KnowledgeSourceMetadata.empty());
     }
 
     public KnowledgeItem {
         governance = governance == null ? KnowledgeGovernance.empty() : governance;
+        sourceMetadata = sourceMetadata == null
+                ? KnowledgeSourceMetadata.empty()
+                : sourceMetadata;
     }
 
     public KnowledgeItem withId(long newId) {
@@ -103,7 +146,7 @@ public record KnowledgeItem(
                 userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
                 embeddingId, embeddingModel, embeddingDimension, confidence, privacyScore,
                 version + 1, hash, reviewer, now, null, createdAt, now, null,
-                governance.withPrevious(trustLevel, status));
+                governance.withPrevious(trustLevel, status), sourceMetadata);
     }
 
     public KnowledgeItem promoteToMedium(
@@ -122,7 +165,7 @@ public record KnowledgeItem(
                 summary,
                 knowledgeType,
                 TrustLevel.MEDIUM,
-                KnowledgeStatus.HUMAN_REVIEW_PENDING,
+                KnowledgeStatus.MEDIUM_ENABLED,
                 promotedScope,
                 userId,
                 conversationId,
@@ -144,7 +187,16 @@ public record KnowledgeItem(
                 createdAt,
                 now,
                 expiresAt,
-                evaluatedGovernance.withPrevious(trustLevel, status));
+                evaluatedGovernance.withPrevious(trustLevel, status),
+                sourceMetadata);
+    }
+
+    public KnowledgeItem requestHumanReview(Instant now) {
+        if (trustLevel != TrustLevel.MEDIUM || status != KnowledgeStatus.MEDIUM_ENABLED) {
+            throw new IllegalStateException(
+                    "Only MEDIUM_ENABLED knowledge can enter human review");
+        }
+        return withStatus(KnowledgeStatus.HUMAN_REVIEW_PENDING, now);
     }
 
     public KnowledgeItem reject(String reason, Instant now) {
@@ -167,7 +219,7 @@ public record KnowledgeItem(
                 userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
                 embeddingId, embeddingModel, embeddingDimension, confidence, privacyScore,
                 version, newHash, approvedBy, approvedAt, rejectReason, createdAt, updatedAt,
-                expiresAt, governance);
+                expiresAt, governance, sourceMetadata);
     }
 
     public KnowledgeItem withExpiresAt(Instant newExpiresAt, Instant now) {
@@ -176,7 +228,7 @@ public record KnowledgeItem(
                 userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
                 embeddingId, embeddingModel, embeddingDimension, confidence, privacyScore,
                 version, hash, approvedBy, approvedAt, rejectReason, createdAt, now,
-                newExpiresAt, governance);
+                newExpiresAt, governance, sourceMetadata);
     }
 
     public KnowledgeItem withGovernance(KnowledgeGovernance newGovernance, Instant now) {
@@ -235,6 +287,6 @@ public record KnowledgeItem(
                 userId, conversationId, projectId, tenantId, sourceType, sourceRef, evidence,
                 newEmbeddingId, newEmbeddingModel, newEmbeddingDimension, confidence, privacyScore,
                 newVersion, hash, newApprovedBy, newApprovedAt, newRejectReason,
-                createdAt, newUpdatedAt, expiresAt, newGovernance);
+                createdAt, newUpdatedAt, expiresAt, newGovernance, sourceMetadata);
     }
 }

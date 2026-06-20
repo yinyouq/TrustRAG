@@ -9,8 +9,12 @@ trust-rag:
     enabled: false
   milvus:
     uri: http://localhost:19530
-    collection: trust_rag_knowledge
+    collection: trust_rag_knowledge_vector
     dimension: 1536
+  opensearch:
+    uris:
+      - http://localhost:9200
+    index-name: trust_rag_knowledge_keyword
 ```
 
 宿主应用还需要提供 `DataSource`、Spring AI `ChatModel` 和 `EmbeddingModel`。
@@ -31,18 +35,43 @@ trust-rag:
     enabled: true
     uri: http://localhost:19530
     database: default
-    collection: trust_rag_knowledge
+    collection: trust_rag_knowledge_vector
     dimension: 1536
     metric-type: COSINE
+    vector-top-k: 30
     auto-create-collection: true
     connect-timeout-ms: 10000
     rpc-deadline-ms: 30000
+  opensearch:
+    enabled: true
+    uris:
+      - http://localhost:9200
+    username:
+    password:
+    index-name: trust_rag_knowledge_keyword
+    keyword-top-k: 30
+    auto-create-index: true
   retrieval:
+    mode: hybrid-rrf
+    prompt-top-k: 5
+    fusion-top-n: 30
+    parallelism: 2
     high-trust-top-k: 5
     medium-trust-top-k: 3
-    low-trust-top-k: 3
+    low-conversation-top-k: 2
+    low-user-top-k: 2
+    low-project-top-k: 2
+    low-tenant-top-k: 2
+    low-global-candidate-top-k: 1
     min-vector-score: 0.60
     allow-global-low-candidate: false
+  rrf:
+    enabled: true
+    k: 60
+  trust-boost:
+    high: 1.0
+    medium: 0.92
+    low: 0.80
   trust-weight:
     high: 1.0
     medium: 0.70
@@ -50,7 +79,7 @@ trust-rag:
     low-user: 0.45
     low-project: 0.45
     low-tenant: 0.35
-    low-global-candidate: 0.20
+    low-global-candidate: 0.15
   promotion:
     enabled: true
     batch-size: 50
@@ -76,20 +105,39 @@ trust-rag:
     llm-judge-enabled: true
   source-score:
     scores:
-      official: 0.95
-      manual: 0.85
-      document: 0.80
-      database: 0.80
+      official_doc: 0.95
+      internal_doc: 0.90
+      database_result: 0.85
+      tool_result: 0.80
       user_correction: 0.60
-      conversation: 0.45
+      llm_summary: 0.30
       unknown: 0.10
   lifecycle:
     low-ttl-days: 30
-    medium-ttl-days: 180
+    medium-ttl-days: 90
     auto-expire-enabled: true
     negative-feedback-downgrade-threshold: 3
-    # 每轮信任级别最多重试的 INDEX_FAILED 数量；0 表示关闭自动重试
+    # 每个 INDEX_RETRY 任务的最大失败次数；0 表示关闭自动重试
     index-failed-retry-limit: 3
+  index-sync:
+    enabled: true
+    batch-size: 100
+    retry-limit: 3
+    fixed-delay-ms: 30000
+  document:
+    enabled: true
+    storage-path: ./data/trust-rag/documents
+    max-upload-bytes: 52428800
+    max-git-file-bytes: 2097152
+    max-git-files: 500
+    batch-size: 5
+    retry-limit: 3
+    fixed-delay-ms: 5000
+    keep-source-files: true
+    git-remote-enabled: false
+    git-allowed-hosts: []
+    git-allowed-local-roots:
+      - ./data/trust-rag/git-sources
   gap-detection:
     low-vector-score-threshold: 0.65
     low-rerank-score-threshold: 0.55
@@ -130,13 +178,28 @@ spring:
     locations: classpath:db/mysql
 ```
 
-V2 会新增治理字段以及 `promotion_task`、`conflict_record`、`knowledge_lineage`，并把旧版 `ENABLED/PENDING_REVIEW` 状态迁移到三池状态。
+V2 会新增治理字段以及 `promotion_task`、`conflict_record`、`knowledge_lineage`，并把旧版 `ENABLED/PENDING_REVIEW` 状态迁移到三池状态。V3 会为 `retrieval_log` 增加向量排名、关键词排名和 RRF 分数，并创建 `index_sync_task` 双索引补偿表。V4 会创建 `document_import_task`，并为知识项增加来源标题、URL、页码、章节、文档任务和块序号字段。
+
+Spring Boot 默认 multipart 上限通常小于 TrustRAG 的文档上限。宿主应用还应同步配置：
+
+```yaml
+spring:
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+```
+
+远程 Git 默认关闭。启用后必须配置 `git-allowed-hosts`；私有仓库凭据不会保存，也不允许出现在 URL 中。本地 Git 仅允许读取 `git-allowed-local-roots` 下的仓库。
+
+旧配置 `retrieval.low-trust-top-k` 仍可使用，它会同时设置会话、用户、项目和租户四个私有低池配额。新项目建议使用独立配额，避免某一作用域占满整个低池结果集。
 
 ## 自定义扩展
 
 声明同类型 Bean 即可覆盖默认实现，包括：
 
-- `LlmClient`、`EmbeddingClient`、`KnowledgeVectorStore`
+- `LlmClient`、`EmbeddingClient`、`KnowledgeVectorStore`、`KnowledgeKeywordStore`
+- `KnowledgeIndexService`、`RrfFusionService`、`IndexSyncTaskRepository`
 - `QueryRewriteService`、`RerankClient`
 - `PromptBuilder` 或多个 `PromptCustomizer`
 - `PrivacyFilter`、`ScopeResolver`、`ScopeClassifier`

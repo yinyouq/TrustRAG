@@ -1,6 +1,7 @@
 package io.github.trustrag.milvus;
 
 import io.github.trustrag.core.model.ScopeContext;
+import io.github.trustrag.core.model.ScopeType;
 import io.github.trustrag.core.model.TrustLevel;
 import io.github.trustrag.core.model.VectorSearchRequest;
 
@@ -17,16 +18,30 @@ public final class MilvusFilterBuilder {
         values.put("trustLevels", request.trustLevels().stream().map(Enum::name).toList());
 
         List<String> visibleScopes = new ArrayList<>();
-        if (!request.trustLevels().contains(TrustLevel.LOW)) {
-            visibleScopes.add("scope_type == \"GLOBAL\"");
-        } else if (request.allowGlobalCandidate()) {
-            visibleScopes.add("scope_type == \"GLOBAL_CANDIDATE\"");
+        if (request.trustLevels().stream().anyMatch(level -> level != TrustLevel.LOW)
+                && includes(request, ScopeType.GLOBAL)) {
+            values.put(
+                    "trustedGlobalLevels",
+                    request.trustLevels().stream()
+                            .filter(level -> level != TrustLevel.LOW)
+                            .map(Enum::name)
+                            .toList());
+            visibleScopes.add(
+                    "(scope_type == \"GLOBAL\" and trust_level in {trustedGlobalLevels})");
+        }
+        if (request.trustLevels().contains(TrustLevel.LOW)
+                && request.allowGlobalCandidate()
+                && includes(request, ScopeType.GLOBAL_CANDIDATE)) {
+            visibleScopes.add(
+                    "(scope_type == \"GLOBAL_CANDIDATE\" and trust_level == \"LOW\")");
         }
         ScopeContext scope = request.scope();
-        addScope(visibleScopes, values, "TENANT", "tenant_id", "tenantId", scope.tenantId());
-        addScope(visibleScopes, values, "PROJECT", "project_id", "projectId", scope.projectId());
-        addScope(visibleScopes, values, "USER", "user_id", "userId", scope.userId());
-        addScope(visibleScopes, values, "CONVERSATION", "conversation_id", "conversationId", scope.conversationId());
+        addScope(request, visibleScopes, values, ScopeType.TENANT, "tenant_id", "tenantId", scope.tenantId());
+        addScope(request, visibleScopes, values, ScopeType.PROJECT, "project_id", "projectId", scope.projectId());
+        addScope(request, visibleScopes, values, ScopeType.USER, "user_id", "userId", scope.userId());
+        addScope(
+                request, visibleScopes, values, ScopeType.CONVERSATION,
+                "conversation_id", "conversationId", scope.conversationId());
 
         if (visibleScopes.isEmpty()) {
             return new MilvusFilter("false", values);
@@ -37,15 +52,21 @@ public final class MilvusFilterBuilder {
     }
 
     private void addScope(
+            VectorSearchRequest request,
             List<String> expressions,
             Map<String, Object> values,
-            String scopeType,
+            ScopeType scopeType,
             String field,
             String parameter,
             String ownerId) {
-        if (ownerId != null && !ownerId.isBlank()) {
-            expressions.add("(scope_type == \"" + scopeType + "\" and " + field + " == {" + parameter + "})");
+        if (includes(request, scopeType) && ownerId != null && !ownerId.isBlank()) {
+            expressions.add("(scope_type == \"" + scopeType.name()
+                    + "\" and " + field + " == {" + parameter + "})");
             values.put(parameter, ownerId);
         }
+    }
+
+    private boolean includes(VectorSearchRequest request, ScopeType scopeType) {
+        return request.scopeTypes().isEmpty() || request.scopeTypes().contains(scopeType);
     }
 }

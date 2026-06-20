@@ -15,6 +15,9 @@
     <modules>
         <module>trust-rag-core</module>
         <module>trust-rag-milvus</module>
+        <module>trust-rag-opensearch</module>
+        <module>trust-rag-document</module>
+        <module>trust-rag-evaluation</module>
         <module>trust-rag-storage-jdbc</module>
         <module>trust-rag-admin-api</module>
         <module>trust-rag-spring-boot-starter</module>
@@ -30,6 +33,15 @@
         <spring-boot.version>3.5.15</spring-boot.version>
         <spring-ai.version>1.1.5</spring-ai.version>
         <milvus-sdk.version>2.6.18</milvus-sdk.version>
+        <opensearch-java.version>2.19.0</opensearch-java.version>
+        <httpclient5.version>5.4</httpclient5.version>
+        <tika.version>3.3.1</tika.version>
+        <pdfbox.version>3.0.7</pdfbox.version>
+        <poi.version>5.5.1</poi.version>
+        <jsoup.version>1.21.1</jsoup.version>
+        <flexmark.version>0.64.8</flexmark.version>
+        <jgit.version>7.3.0.202506031305-r</jgit.version>
+        <commons-csv.version>1.14.1</commons-csv.version>
         <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
         <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
         <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
@@ -57,6 +69,21 @@
                 <version>${milvus-sdk.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.opensearch.client</groupId>
+                <artifactId>opensearch-java</artifactId>
+                <version>${opensearch-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.client5</groupId>
+                <artifactId>httpclient5</artifactId>
+                <version>${httpclient5.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-csv</artifactId>
+                <version>${commons-csv.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.github.trustrag</groupId>
                 <artifactId>trust-rag-core</artifactId>
                 <version>${project.version}</version>
@@ -64,6 +91,21 @@
             <dependency>
                 <groupId>io.github.trustrag</groupId>
                 <artifactId>trust-rag-milvus</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.trustrag</groupId>
+                <artifactId>trust-rag-opensearch</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.trustrag</groupId>
+                <artifactId>trust-rag-document</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.trustrag</groupId>
+                <artifactId>trust-rag-evaluation</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

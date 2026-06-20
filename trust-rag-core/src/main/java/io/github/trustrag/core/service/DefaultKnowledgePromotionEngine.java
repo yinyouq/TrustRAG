@@ -28,6 +28,7 @@ import io.github.trustrag.core.spi.EvidenceVerifier;
 import io.github.trustrag.core.spi.KnowledgeLineageRepository;
 import io.github.trustrag.core.spi.KnowledgePromotionEngine;
 import io.github.trustrag.core.spi.KnowledgeRepository;
+import io.github.trustrag.core.spi.KnowledgeIndexService;
 import io.github.trustrag.core.spi.KnowledgeVectorStore;
 import io.github.trustrag.core.spi.LlmPreReviewer;
 import io.github.trustrag.core.spi.PrivacyFilter;
@@ -39,6 +40,7 @@ import io.github.trustrag.core.util.KnowledgeHashes;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 public final class DefaultKnowledgePromotionEngine implements KnowledgePromotionEngine {
@@ -47,7 +49,7 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
     private final ReviewTaskRepository reviewTaskRepository;
     private final KnowledgeLineageRepository lineageRepository;
     private final EmbeddingClient embeddingClient;
-    private final KnowledgeVectorStore vectorStore;
+    private final KnowledgeIndexService indexService;
     private final PrivacyFilter privacyFilter;
     private final DuplicateDetector duplicateDetector;
     private final LlmPreReviewer preReviewer;
@@ -75,11 +77,34 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
             KnowledgeStateMachine stateMachine,
             TransactionRunner transactionRunner,
             Clock clock) {
+        this(
+                knowledgeRepository, reviewTaskRepository, lineageRepository, embeddingClient,
+                new VectorOnlyKnowledgeIndexService(vectorStore), privacyFilter, duplicateDetector,
+                preReviewer, evidenceVerifier, conflictDetector, options, lifecycleOptions,
+                stateMachine, transactionRunner, clock);
+    }
+
+    public DefaultKnowledgePromotionEngine(
+            KnowledgeRepository knowledgeRepository,
+            ReviewTaskRepository reviewTaskRepository,
+            KnowledgeLineageRepository lineageRepository,
+            EmbeddingClient embeddingClient,
+            KnowledgeIndexService indexService,
+            PrivacyFilter privacyFilter,
+            DuplicateDetector duplicateDetector,
+            LlmPreReviewer preReviewer,
+            EvidenceVerifier evidenceVerifier,
+            ConflictDetector conflictDetector,
+            PromotionOptions options,
+            LifecycleOptions lifecycleOptions,
+            KnowledgeStateMachine stateMachine,
+            TransactionRunner transactionRunner,
+            Clock clock) {
         this.knowledgeRepository = knowledgeRepository;
         this.reviewTaskRepository = reviewTaskRepository;
         this.lineageRepository = lineageRepository;
         this.embeddingClient = embeddingClient;
-        this.vectorStore = vectorStore;
+        this.indexService = indexService;
         this.privacyFilter = privacyFilter;
         this.duplicateDetector = duplicateDetector;
         this.preReviewer = preReviewer;
@@ -104,10 +129,16 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
         if (candidate.status() != KnowledgeStatus.PROMOTION_RUNNING) {
             stateMachine.validate(candidate.status(), KnowledgeStatus.PROMOTION_RUNNING);
             running = candidate.withStatus(KnowledgeStatus.PROMOTION_RUNNING, clock.instant());
-            if (!knowledgeRepository.updateIfState(running, candidate.status(), candidate.version())) {
-                throw new InvalidKnowledgeStateException(
-                        "Knowledge item was changed before promotion started: " + knowledgeId);
-            }
+            KnowledgeItem started = running;
+            transactionRunner.required(() -> {
+                if (!knowledgeRepository.updateIfState(
+                        started, candidate.status(), candidate.version())) {
+                    throw new InvalidKnowledgeStateException(
+                            "Knowledge item was changed before promotion started: " + knowledgeId);
+                }
+                lineageRepository.save(KnowledgeLineage.system(
+                        knowledgeId, "PROMOTION_STARTED", clock.instant()));
+            });
         }
 
         String effectiveClaim = hasText(running.claim()) ? running.claim() : running.content();
@@ -138,12 +169,21 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
         }
 
         PrivacyResult privacy = privacyFilter.filter(running.content());
-        double privacyRisk = privacy.allowed() ? 0.0 : Math.max(privacy.riskScore(), 0.80);
+        double persistedPrivacyRisk = Math.max(
+                running.privacyScore() == null ? 0.0 : running.privacyScore(),
+                running.governance().privacyRisk() == null
+                        ? 0.0
+                        : running.governance().privacyRisk());
+        double detectedPrivacyRisk = privacy.allowed()
+                ? 0.0
+                : Math.max(privacy.riskScore(), 0.80);
+        double privacyRisk = Math.max(persistedPrivacyRisk, detectedPrivacyRisk);
+        ConflictCheckResult conflict = conflictDetector.check(running, vector);
+        List<KnowledgeItem> similarKnowledge = similarKnowledge(conflict);
         PreReviewResult preReview = options.llmPreReviewEnabled()
-                ? safePreReview(running)
+                ? preReviewer.review(running, similarKnowledge)
                 : zeroPreReview(running);
         EvidenceVerificationResult evidence = evidenceVerifier.verify(running);
-        ConflictCheckResult conflict = conflictDetector.check(running, vector);
         double staleRisk = staleRisk(running, clock.instant());
         double feedbackScore = feedbackScore(running);
         double usageScore = Math.min(1.0, running.governance().usageCount() / 5.0);
@@ -223,7 +263,7 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
         if (promotable && preReview.suggestedAction() == PromotionAction.PROMOTE_TO_MEDIUM) {
             return result(
                     running, PromotionAction.PROMOTE_TO_MEDIUM, true, TrustLevel.MEDIUM,
-                    KnowledgeStatus.HUMAN_REVIEW_PENDING, promotionScore, preReview, evidence,
+                    KnowledgeStatus.MEDIUM_ENABLED, promotionScore, preReview, evidence,
                     feedbackScore, usageScore, conflict.conflictRisk(), privacyRisk, staleRisk,
                     "Automatic checks passed; human final review is required");
         }
@@ -238,7 +278,7 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
     public void promoteToMedium(long knowledgeId, PromotionResult result) {
         KnowledgeItem running = requireRunning(knowledgeId);
         KnowledgeGovernance governance = applyResult(running.governance(), result, "HUMAN_REVIEW_PENDING");
-        KnowledgeItem promoted = running
+        KnowledgeItem medium = running
                 .promoteToMedium(governance, null, governance.normalizedClaim(), clock.instant())
                 .withExpiresAt(
                         clock.instant().plus(
@@ -250,18 +290,35 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
                                 ? ScopeType.GLOBAL
                                 : running.scopeType(),
                         scope(running)));
-        List<Float> vector = embeddingClient.embed(promoted.content());
+        stateMachine.validate(KnowledgeStatus.PROMOTION_RUNNING, KnowledgeStatus.MEDIUM_ENABLED);
+        KnowledgeItem pendingReview = medium.requestHumanReview(clock.instant());
+        stateMachine.validate(KnowledgeStatus.MEDIUM_ENABLED, KnowledgeStatus.HUMAN_REVIEW_PENDING);
+        List<Float> vector = embeddingClient.embed(pendingReview.content());
         validateVector(vector, knowledgeId);
-        vectorStore.upsert(promoted, vector);
+        try {
+            indexService.upsert(pendingReview, vector);
+        } catch (RuntimeException exception) {
+            markPromotionIndexFailed(
+                    running, pendingReview,
+                    "LOW_TO_MEDIUM_INDEX_FAILED");
+            throw exception;
+        }
         transactionRunner.required(() -> {
             if (!knowledgeRepository.updateIfState(
-                    promoted, KnowledgeStatus.PROMOTION_RUNNING, running.version())) {
+                    medium, KnowledgeStatus.PROMOTION_RUNNING, running.version())) {
                 throw new InvalidKnowledgeStateException(
                         "Knowledge changed while being promoted: " + knowledgeId);
             }
-            reviewTaskRepository.save(ReviewTask.pending(knowledgeId, clock.instant()));
             lineageRepository.save(KnowledgeLineage.system(
                     knowledgeId, "LOW_TO_MEDIUM_PROMOTED", clock.instant()));
+            if (!knowledgeRepository.updateIfState(
+                    pendingReview, KnowledgeStatus.MEDIUM_ENABLED, medium.version())) {
+                throw new InvalidKnowledgeStateException(
+                        "Knowledge changed while entering human review: " + knowledgeId);
+            }
+            reviewTaskRepository.save(ReviewTask.pending(knowledgeId, clock.instant()));
+            lineageRepository.save(KnowledgeLineage.system(
+                    knowledgeId, "HUMAN_REVIEW_QUEUED", clock.instant()));
         });
     }
 
@@ -292,7 +349,12 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
                 TrustLevel.LOW, KnowledgeStatus.LOW_ENABLED, reason, clock.instant());
         List<Float> vector = embeddingClient.embed(low.content());
         validateVector(vector, knowledgeId);
-        vectorStore.upsert(low, vector);
+        try {
+            indexService.upsert(low, vector);
+        } catch (RuntimeException exception) {
+            markPromotionIndexFailed(running, low, "KEEP_LOW_INDEX_FAILED");
+            throw exception;
+        }
         transactionRunner.required(() -> {
             if (!knowledgeRepository.updateIfState(
                     low, KnowledgeStatus.PROMOTION_RUNNING, running.version())) {
@@ -323,7 +385,7 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
         });
         if (!target.isRetrievable()) {
             try {
-                vectorStore.delete(knowledgeId);
+                indexService.delete(knowledgeId);
             } catch (Exception ignored) {
                 // Relational status is authoritative and blocks stale vectors.
             }
@@ -349,6 +411,27 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
                 item.id(), action, promotable, targetTrust, targetStatus, promotionScore,
                 preReview.qualityScore(), evidence.sourceScore(), evidence.evidenceScore(),
                 feedbackScore, usageScore, conflictRisk, privacyRisk, staleRisk, reason);
+    }
+
+    private void markPromotionIndexFailed(
+            KnowledgeItem running,
+            KnowledgeItem target,
+            String action) {
+        KnowledgeItem failed = target.withIndexState(
+                        KnowledgeStatus.INDEX_FAILED,
+                        target.embeddingId(),
+                        embeddingClient.modelName(),
+                        embeddingClient.dimension(),
+                        clock.instant())
+                .withGovernance(
+                        target.governance().withStage(
+                                "INDEX_RETRY_TARGET_" + target.status().name()),
+                        clock.instant());
+        if (knowledgeRepository.updateIfState(
+                failed, KnowledgeStatus.PROMOTION_RUNNING, running.version())) {
+            lineageRepository.save(KnowledgeLineage.system(
+                    running.id(), action, clock.instant()));
+        }
     }
 
     private PromotionResult result(
@@ -378,15 +461,6 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
                 stage, result.promotionScore(), result.sourceScore(), result.evidenceScore(),
                 result.feedbackScore(), result.usageScore(), result.privacyRisk(),
                 result.conflictRisk(), result.staleRisk(), clock.instant());
-    }
-
-    private PreReviewResult safePreReview(KnowledgeItem candidate) {
-        try {
-            return preReviewer.review(candidate, List.of());
-        } catch (RuntimeException exception) {
-            return PreReviewResult.conservative(
-                    candidate.claim(), "LLM pre-review failed: " + exception.getMessage());
-        }
     }
 
     private PreReviewResult zeroPreReview(KnowledgeItem candidate) {
@@ -448,5 +522,11 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private List<KnowledgeItem> similarKnowledge(ConflictCheckResult conflict) {
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        conflict.records().forEach(record -> ids.add(record.existingKnowledgeId()));
+        return knowledgeRepository.findAllByIds(ids);
     }
 }

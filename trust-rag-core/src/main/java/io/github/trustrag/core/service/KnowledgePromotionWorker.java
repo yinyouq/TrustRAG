@@ -5,7 +5,10 @@ import io.github.trustrag.core.model.KnowledgeStatus;
 import io.github.trustrag.core.model.PromotionAction;
 import io.github.trustrag.core.model.PromotionResult;
 import io.github.trustrag.core.model.PromotionTask;
+import io.github.trustrag.core.model.PromotionTaskType;
+import io.github.trustrag.core.model.KnowledgeLineage;
 import io.github.trustrag.core.spi.KnowledgePromotionEngine;
+import io.github.trustrag.core.spi.KnowledgeLineageRepository;
 import io.github.trustrag.core.spi.KnowledgeRepository;
 import io.github.trustrag.core.spi.PromotionTaskRepository;
 
@@ -16,6 +19,7 @@ public final class KnowledgePromotionWorker {
 
     private final PromotionTaskRepository taskRepository;
     private final KnowledgeRepository knowledgeRepository;
+    private final KnowledgeLineageRepository lineageRepository;
     private final KnowledgePromotionEngine engine;
     private final int retryLimit;
     private final Clock clock;
@@ -23,18 +27,21 @@ public final class KnowledgePromotionWorker {
     public KnowledgePromotionWorker(
             PromotionTaskRepository taskRepository,
             KnowledgeRepository knowledgeRepository,
+            KnowledgeLineageRepository lineageRepository,
             KnowledgePromotionEngine engine,
             int retryLimit,
             Clock clock) {
         this.taskRepository = taskRepository;
         this.knowledgeRepository = knowledgeRepository;
+        this.lineageRepository = lineageRepository;
         this.engine = engine;
         this.retryLimit = retryLimit;
         this.clock = clock;
     }
 
     public int runBatch(int limit) {
-        List<PromotionTask> tasks = taskRepository.findRunnable(retryLimit, limit);
+        List<PromotionTask> tasks = taskRepository.findRunnableByType(
+                PromotionTaskType.LOW_TO_MEDIUM, retryLimit, limit);
         for (PromotionTask task : tasks) {
             process(task);
         }
@@ -78,7 +85,10 @@ public final class KnowledgePromotionWorker {
         if (item.status() == KnowledgeStatus.PROMOTION_RUNNING) {
             KnowledgeItem pending = item.withStatus(
                     KnowledgeStatus.PROMOTION_PENDING, clock.instant());
-            knowledgeRepository.updateIfState(pending, item.status(), item.version());
+            if (knowledgeRepository.updateIfState(pending, item.status(), item.version())) {
+                lineageRepository.save(KnowledgeLineage.system(
+                        item.id(), "PROMOTION_RETRY_QUEUED", clock.instant()));
+            }
         }
     }
 

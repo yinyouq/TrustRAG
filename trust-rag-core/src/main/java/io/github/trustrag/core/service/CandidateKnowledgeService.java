@@ -62,32 +62,44 @@ public final class CandidateKnowledgeService {
         String hash = KnowledgeHashes.scopedHash(candidate.content(), candidate.scopeType(), context);
         Optional<KnowledgeItem> existing = knowledgeRepository.findByHash(hash);
         if (existing.isPresent()) {
-            return reusableExisting(existing.get());
+            return reuseAndIncrement(existing.get());
         }
 
+        var governance = io.github.trustrag.core.model.KnowledgeGovernance.empty()
+                .withPrivacyRisk(candidate.privacyRisk());
         KnowledgeItem item = new KnowledgeItem(
                 null, candidate.title(), candidate.claim(), candidate.content(), null, "candidate",
                 candidate.trustLevel(), candidate.status(), candidate.scopeType(),
                 context.userId(), context.conversationId(), context.projectId(), context.tenantId(),
                 candidate.sourceType(), candidate.sourceRef(), candidate.evidence(),
-                null, null, null, candidate.confidence(), null, 1, hash,
+                null, null, null, candidate.confidence(), candidate.privacyRisk(), 1, hash,
                 null, null, null, now, now,
-                now.plus(lifecycleOptions.lowTtlDays(), ChronoUnit.DAYS));
+                now.plus(lifecycleOptions.lowTtlDays(), ChronoUnit.DAYS), governance);
         visibilityPolicy.validateOwnership(item);
         try {
             return transactionRunner.required(() -> {
                 KnowledgeItem saved = knowledgeRepository.save(item);
                 promotionTaskRepository.save(PromotionTask.pending(
                         saved.id(), PromotionTaskType.LOW_TO_MEDIUM, now));
+                lineageRepository.save(new KnowledgeLineage(
+                        null, saved.id(), null,
+                        "user_correction".equals(candidate.sourceType()) ? candidate.sourceRef() : null,
+                        null, "LOW_CANDIDATE_CREATED", "SYSTEM", "trust-rag", now));
                 lineageRepository.save(KnowledgeLineage.system(
-                        saved.id(), "LOW_CANDIDATE_CREATED", now));
+                        saved.id(), "PROMOTION_QUEUED", now));
                 return saved;
             });
         } catch (RuntimeException exception) {
             return knowledgeRepository.findByHash(hash)
-                    .map(this::reusableExisting)
+                    .map(this::reuseAndIncrement)
                     .orElseThrow(() -> exception);
         }
+    }
+
+    private KnowledgeItem reuseAndIncrement(KnowledgeItem existing) {
+        KnowledgeItem reusable = reusableExisting(existing);
+        knowledgeRepository.incrementUsageCount(reusable.id());
+        return reusable;
     }
 
     private KnowledgeItem reusableExisting(KnowledgeItem existing) {

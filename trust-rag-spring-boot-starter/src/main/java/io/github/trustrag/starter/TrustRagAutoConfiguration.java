@@ -5,6 +5,7 @@ import io.github.trustrag.core.config.EngineOptions;
 import io.github.trustrag.core.config.ConflictDetectionOptions;
 import io.github.trustrag.core.config.DuplicateDetectionOptions;
 import io.github.trustrag.core.config.GapDetectionOptions;
+import io.github.trustrag.core.config.HybridRetrievalOptions;
 import io.github.trustrag.core.config.LifecycleOptions;
 import io.github.trustrag.core.config.PromotionOptions;
 import io.github.trustrag.core.config.RetrievalOptions;
@@ -15,10 +16,12 @@ import io.github.trustrag.core.service.DefaultConflictDetector;
 import io.github.trustrag.core.service.DefaultDuplicateDetector;
 import io.github.trustrag.core.service.DefaultEvidenceVerifier;
 import io.github.trustrag.core.service.DefaultKnowledgeLifecycleManager;
+import io.github.trustrag.core.service.DefaultKnowledgeIndexService;
 import io.github.trustrag.core.service.DefaultKnowledgePromotionEngine;
 import io.github.trustrag.core.service.DefaultPrivacyFilter;
 import io.github.trustrag.core.service.DefaultPromptBuilder;
 import io.github.trustrag.core.service.DefaultQueryRewriteService;
+import io.github.trustrag.core.service.DefaultRrfFusionService;
 import io.github.trustrag.core.service.DefaultScopeClassifier;
 import io.github.trustrag.core.service.DefaultScopeResolver;
 import io.github.trustrag.core.service.DefaultTrustRagEngine;
@@ -28,8 +31,10 @@ import io.github.trustrag.core.service.KnowledgePromotionWorker;
 import io.github.trustrag.core.service.KnowledgeReviewService;
 import io.github.trustrag.core.service.KnowledgeStateMachine;
 import io.github.trustrag.core.service.KnowledgeVisibilityPolicy;
+import io.github.trustrag.core.service.IndexSyncWorker;
 import io.github.trustrag.core.service.NoOpRerankClient;
 import io.github.trustrag.core.service.NoOpLlmPreReviewer;
+import io.github.trustrag.core.service.NoOpKnowledgeKeywordStore;
 import io.github.trustrag.core.service.PromotionTaskService;
 import io.github.trustrag.core.service.RecursiveTextChunkStrategy;
 import io.github.trustrag.core.service.RuleBasedKnowledgeRelationJudge;
@@ -45,9 +50,12 @@ import io.github.trustrag.core.spi.DuplicateDetector;
 import io.github.trustrag.core.spi.EmbeddingClient;
 import io.github.trustrag.core.spi.EvidenceVerifier;
 import io.github.trustrag.core.spi.FeedbackRepository;
+import io.github.trustrag.core.spi.IndexSyncTaskRepository;
 import io.github.trustrag.core.spi.KnowledgeGapDetector;
 import io.github.trustrag.core.spi.KnowledgeLifecycleManager;
 import io.github.trustrag.core.spi.KnowledgeLineageRepository;
+import io.github.trustrag.core.spi.KnowledgeIndexService;
+import io.github.trustrag.core.spi.KnowledgeKeywordStore;
 import io.github.trustrag.core.spi.KnowledgePromotionEngine;
 import io.github.trustrag.core.spi.KnowledgeRepository;
 import io.github.trustrag.core.spi.KnowledgeRelationJudge;
@@ -61,26 +69,65 @@ import io.github.trustrag.core.spi.PromotionTaskRepository;
 import io.github.trustrag.core.spi.QueryRewriteService;
 import io.github.trustrag.core.spi.RagTraceRepository;
 import io.github.trustrag.core.spi.RerankClient;
+import io.github.trustrag.core.spi.RrfFusionService;
 import io.github.trustrag.core.spi.ReviewCallback;
 import io.github.trustrag.core.spi.ReviewTaskRepository;
 import io.github.trustrag.core.spi.ScopeClassifier;
 import io.github.trustrag.core.spi.ScopeResolver;
 import io.github.trustrag.core.spi.TransactionRunner;
+import io.github.trustrag.document.CompositeDocumentParser;
+import io.github.trustrag.document.DocumentImportService;
+import io.github.trustrag.document.DocumentImportSettings;
+import io.github.trustrag.document.DocumentImportTaskRepository;
+import io.github.trustrag.document.DocumentImportWorker;
+import io.github.trustrag.document.DocumentParser;
+import io.github.trustrag.document.DocumentSourceLoader;
+import io.github.trustrag.document.GitDocumentSourceLoader;
+import io.github.trustrag.document.GitSourcePolicy;
+import io.github.trustrag.document.HtmlDocumentParser;
+import io.github.trustrag.document.LocalDocumentStorage;
+import io.github.trustrag.document.MarkdownDocumentParser;
+import io.github.trustrag.document.PdfDocumentParser;
+import io.github.trustrag.document.TikaDocumentParser;
+import io.github.trustrag.document.UploadDocumentSourceLoader;
+import io.github.trustrag.document.WikiDocumentParser;
+import io.github.trustrag.document.WordDocumentParser;
+import io.github.trustrag.evaluation.DefaultEvalRunner;
+import io.github.trustrag.evaluation.DefaultGenerationJudgeService;
+import io.github.trustrag.evaluation.EvalCaseService;
+import io.github.trustrag.evaluation.EvalDatasetService;
+import io.github.trustrag.evaluation.EvalReportService;
+import io.github.trustrag.evaluation.EvalRunService;
+import io.github.trustrag.evaluation.EvalRunner;
+import io.github.trustrag.evaluation.EvalTraceReader;
+import io.github.trustrag.evaluation.EvaluationOptions;
+import io.github.trustrag.evaluation.EvaluationRepository;
+import io.github.trustrag.evaluation.GenerationJudgeService;
+import io.github.trustrag.evaluation.GovernanceMetricService;
+import io.github.trustrag.evaluation.NoOpGenerationJudgeService;
+import io.github.trustrag.evaluation.RetrievalMetricCalculator;
 import io.github.trustrag.milvus.MilvusFilterBuilder;
 import io.github.trustrag.milvus.MilvusKnowledgeVectorStore;
 import io.github.trustrag.milvus.MilvusSettings;
+import io.github.trustrag.opensearch.OpenSearchKnowledgeKeywordStore;
+import io.github.trustrag.opensearch.OpenSearchSettings;
 import io.github.trustrag.storage.jdbc.JdbcFeedbackRepository;
 import io.github.trustrag.storage.jdbc.JdbcConflictRecordRepository;
 import io.github.trustrag.storage.jdbc.JdbcKnowledgeLineageRepository;
 import io.github.trustrag.storage.jdbc.JdbcKnowledgeRepository;
+import io.github.trustrag.storage.jdbc.JdbcIndexSyncTaskRepository;
 import io.github.trustrag.storage.jdbc.JdbcPromotionTaskRepository;
 import io.github.trustrag.storage.jdbc.JdbcRagTraceRepository;
 import io.github.trustrag.storage.jdbc.JdbcReviewTaskRepository;
+import io.github.trustrag.storage.jdbc.JdbcDocumentImportTaskRepository;
+import io.github.trustrag.storage.jdbc.JdbcEvaluationRepository;
+import io.github.trustrag.storage.jdbc.JdbcEvalTraceReader;
 import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -90,19 +137,30 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import io.github.trustrag.core.model.RetrievalMode;
 
 @AutoConfiguration(after = DataSourceAutoConfiguration.class)
 @EnableConfigurationProperties(TrustRagProperties.class)
 @EnableScheduling
 @ConditionalOnProperty(prefix = "trust-rag", name = "enabled", havingValue = "true")
 public class TrustRagAutoConfiguration {
+
+    private static final System.Logger LOGGER =
+            System.getLogger(TrustRagAutoConfiguration.class.getName());
 
     @Bean
     @ConditionalOnMissingBean
@@ -126,7 +184,7 @@ public class TrustRagAutoConfiguration {
                 engine.isEnableGapDetection(),
                 engine.isEnableCandidateExtraction(),
                 engine.getDefaultTopK(),
-                engine.getPromptMaxChunks(),
+                properties.getRetrieval().getPromptTopK(),
                 properties.getTrace().isSavePrompt());
     }
 
@@ -136,9 +194,14 @@ public class TrustRagAutoConfiguration {
         TrustRagProperties.Retrieval retrieval = properties.getRetrieval();
         TrustRagProperties.TrustWeight weights = properties.getTrustWeight();
         return new RetrievalOptions(
+                properties.getEngine().getDefaultTopK(),
                 retrieval.getHighTrustTopK(),
                 retrieval.getMediumTrustTopK(),
-                retrieval.getLowTrustTopK(),
+                retrieval.getLowConversationTopK(),
+                retrieval.getLowUserTopK(),
+                retrieval.getLowProjectTopK(),
+                retrieval.getLowTenantTopK(),
+                retrieval.getLowGlobalCandidateTopK(),
                 retrieval.getMinVectorScore(),
                 weights.getHigh(),
                 weights.getMedium(),
@@ -148,6 +211,30 @@ public class TrustRagAutoConfiguration {
                 weights.getLowTenant(),
                 weights.getLowGlobalCandidate(),
                 retrieval.isAllowGlobalLowCandidate());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    HybridRetrievalOptions trustRagHybridRetrievalOptions(
+            TrustRagProperties properties) {
+        TrustRagProperties.Retrieval retrieval = properties.getRetrieval();
+        RetrievalMode mode = RetrievalMode.valueOf(
+                retrieval.getMode()
+                        .trim()
+                        .replace('-', '_')
+                        .toUpperCase(Locale.ROOT));
+        if (!properties.getRrf().isEnabled()) {
+            mode = RetrievalMode.VECTOR;
+        }
+        return new HybridRetrievalOptions(
+                mode,
+                retrieval.getFusionTopN(),
+                properties.getMilvus().getVectorTopK(),
+                properties.getOpensearch().getKeywordTopK(),
+                properties.getRrf().getK(),
+                properties.getTrustBoost().getHigh(),
+                properties.getTrustBoost().getMedium(),
+                properties.getTrustBoost().getLow());
     }
 
     @Bean
@@ -239,6 +326,78 @@ public class TrustRagAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    IndexSyncTaskRepository indexSyncTaskRepository(DataSource dataSource) {
+        return new JdbcIndexSyncTaskRepository(
+                new NamedParameterJdbcTemplate(dataSource));
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    DocumentImportTaskRepository documentImportTaskRepository(DataSource dataSource) {
+        return new JdbcDocumentImportTaskRepository(
+                new NamedParameterJdbcTemplate(dataSource));
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    EvaluationOptions trustRagEvaluationOptions(TrustRagProperties properties) {
+        TrustRagProperties.Evaluation evaluation = properties.getEvaluation();
+        TrustRagProperties.Runner runner = evaluation.getRunner();
+        TrustRagProperties.Metrics metrics = evaluation.getMetrics();
+        TrustRagProperties.Judge judge = evaluation.getJudge();
+        TrustRagProperties.Governance governance = evaluation.getGovernance();
+        return new EvaluationOptions(
+                evaluation.isEnabled(),
+                new EvaluationOptions.Runner(
+                        runner.getThreadPoolSize(),
+                        runner.getCaseTimeoutSeconds(),
+                        runner.isSaveEvalTrace()),
+                new EvaluationOptions.Metrics(
+                        metrics.getRecallKValues(),
+                        metrics.getPrecisionKValues(),
+                        metrics.getNdcgKValues()),
+                new EvaluationOptions.Judge(
+                        judge.isEnabled(),
+                        judge.getModel(),
+                        judge.getTemperature(),
+                        judge.getMaxRetry(),
+                        judge.isSavePrompt(),
+                        judge.isSaveOutput()),
+                new EvaluationOptions.Governance(
+                        governance.isSnapshotEnabled(),
+                        governance.getSnapshotCron()));
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    EvaluationRepository evaluationRepository(DataSource dataSource, ObjectMapper objectMapper) {
+        return new JdbcEvaluationRepository(
+                new NamedParameterJdbcTemplate(dataSource), objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    EvalTraceReader evalTraceReader(DataSource dataSource) {
+        return new JdbcEvalTraceReader(new NamedParameterJdbcTemplate(dataSource));
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     ConflictRecordRepository conflictRecordRepository(DataSource dataSource) {
         return new JdbcConflictRecordRepository(new NamedParameterJdbcTemplate(dataSource));
     }
@@ -302,8 +461,77 @@ public class TrustRagAutoConfiguration {
                         milvus.getMetricType(),
                         milvus.isAutoCreateCollection()),
                 new MilvusFilterBuilder());
-        store.initialize();
+        try {
+            store.initialize();
+        } catch (RuntimeException exception) {
+            LOGGER.log(
+                    System.Logger.Level.WARNING,
+                    "Milvus initialization failed; retrieval will use keyword fallback until recovery",
+                    exception);
+        }
         return store;
+    }
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnProperty(
+            prefix = "trust-rag.opensearch",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean(KnowledgeKeywordStore.class)
+    OpenSearchKnowledgeKeywordStore openSearchKnowledgeKeywordStore(
+            TrustRagProperties properties) {
+        TrustRagProperties.OpenSearch openSearch = properties.getOpensearch();
+        OpenSearchKnowledgeKeywordStore store =
+                OpenSearchKnowledgeKeywordStore.connect(new OpenSearchSettings(
+                        openSearch.getUris(),
+                        openSearch.getUsername(),
+                        openSearch.getPassword(),
+                        openSearch.getIndexName(),
+                        openSearch.isAutoCreateIndex()));
+        try {
+            store.initialize();
+        } catch (RuntimeException exception) {
+            LOGGER.log(
+                    System.Logger.Level.WARNING,
+                    "OpenSearch initialization failed; retrieval will use vector fallback until recovery",
+                    exception);
+        }
+        return store;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(KnowledgeKeywordStore.class)
+    KnowledgeKeywordStore noOpKnowledgeKeywordStore() {
+        return new NoOpKnowledgeKeywordStore();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    RrfFusionService rrfFusionService() {
+        return new DefaultRrfFusionService();
+    }
+
+    @Bean(name = "trustRagRetrievalExecutor", destroyMethod = "shutdown")
+    @ConditionalOnMissingBean(name = "trustRagRetrievalExecutor")
+    ExecutorService trustRagRetrievalExecutor(TrustRagProperties properties) {
+        int parallelism = Math.max(2, properties.getRetrieval().getParallelism());
+        return Executors.newFixedThreadPool(parallelism, runnable -> {
+            Thread thread = new Thread(runnable, "trust-rag-retrieval");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    KnowledgeIndexService knowledgeIndexService(
+            KnowledgeVectorStore vectorStore,
+            KnowledgeKeywordStore keywordStore,
+            IndexSyncTaskRepository taskRepository,
+            Clock clock) {
+        return new DefaultKnowledgeIndexService(
+                vectorStore, keywordStore, taskRepository, clock);
     }
 
     @Bean
@@ -383,11 +611,16 @@ public class TrustRagAutoConfiguration {
     TrustAwareRetriever trustAwareRetriever(
             EmbeddingClient embeddingClient,
             KnowledgeVectorStore vectorStore,
+            KnowledgeKeywordStore keywordStore,
             KnowledgeRepository knowledgeRepository,
             KnowledgeVisibilityPolicy visibilityPolicy,
-            RetrievalOptions options) {
+            RetrievalOptions options,
+            HybridRetrievalOptions hybridOptions,
+            RrfFusionService fusionService,
+            @Qualifier("trustRagRetrievalExecutor") Executor executor) {
         return new TrustAwareRetriever(
-                embeddingClient, vectorStore, knowledgeRepository, visibilityPolicy, options);
+                embeddingClient, vectorStore, keywordStore, knowledgeRepository,
+                visibilityPolicy, options, hybridOptions, fusionService, executor);
     }
 
     @Bean
@@ -427,17 +660,285 @@ public class TrustRagAutoConfiguration {
     KnowledgeIngestionService knowledgeIngestionService(
             ChunkStrategy chunkStrategy,
             EmbeddingClient embeddingClient,
-            KnowledgeVectorStore vectorStore,
+            KnowledgeIndexService indexService,
             KnowledgeRepository knowledgeRepository,
+            KnowledgeLineageRepository lineageRepository,
             KnowledgeVisibilityPolicy visibilityPolicy,
             ReviewTaskRepository reviewTaskRepository,
             TransactionRunner transactionRunner,
             LifecycleOptions lifecycleOptions,
             Clock clock) {
         return new KnowledgeIngestionService(
-                chunkStrategy, embeddingClient, vectorStore, knowledgeRepository,
-                visibilityPolicy, reviewTaskRepository, transactionRunner,
+                chunkStrategy, embeddingClient, indexService, knowledgeRepository,
+                lineageRepository, visibilityPolicy, reviewTaskRepository, transactionRunner,
                 lifecycleOptions, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.document",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    DocumentImportSettings documentImportSettings(TrustRagProperties properties) {
+        TrustRagProperties.DocumentImport value = properties.getDocument();
+        return new DocumentImportSettings(
+                Path.of(value.getStoragePath()),
+                value.getMaxUploadBytes(),
+                value.getMaxGitFileBytes(),
+                value.getMaxGitFiles(),
+                value.getBatchSize(),
+                value.getRetryLimit(),
+                value.isKeepSourceFiles(),
+                value.isGitRemoteEnabled(),
+                DocumentImportSettings.normalize(value.getGitAllowedHosts()),
+                DocumentImportSettings.normalizePaths(value.getGitAllowedLocalRoots()),
+                DocumentImportSettings.normalize(value.getAllowedExtensions()));
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.document",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    LocalDocumentStorage localDocumentStorage(DocumentImportSettings settings) {
+        return new LocalDocumentStorage(settings);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.document",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    GitSourcePolicy gitSourcePolicy(DocumentImportSettings settings) {
+        return new GitSourcePolicy(settings);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.document",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    DocumentParser documentParser() {
+        return new CompositeDocumentParser(List.of(
+                new PdfDocumentParser(),
+                new WordDocumentParser(),
+                new HtmlDocumentParser(),
+                new MarkdownDocumentParser(),
+                new WikiDocumentParser(),
+                new TikaDocumentParser()));
+    }
+
+    @Bean(name = "trustRagDocumentSourceLoaders")
+    @ConditionalOnProperty(
+            prefix = "trust-rag.document",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean(name = "trustRagDocumentSourceLoaders")
+    List<DocumentSourceLoader> trustRagDocumentSourceLoaders(
+            LocalDocumentStorage storage,
+            DocumentImportSettings settings,
+            GitSourcePolicy gitSourcePolicy) {
+        return List.of(
+                new UploadDocumentSourceLoader(storage),
+                new GitDocumentSourceLoader(settings, gitSourcePolicy));
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.document",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    DocumentImportService documentImportService(
+            DocumentImportTaskRepository taskRepository,
+            LocalDocumentStorage storage,
+            DocumentImportSettings settings,
+            GitSourcePolicy gitSourcePolicy,
+            Clock clock) {
+        return new DocumentImportService(
+                taskRepository, storage, settings, gitSourcePolicy, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.document",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    DocumentImportWorker documentImportWorker(
+            DocumentImportTaskRepository taskRepository,
+            KnowledgeIngestionService ingestionService,
+            DocumentParser parser,
+            @Qualifier("trustRagDocumentSourceLoaders") List<DocumentSourceLoader> sourceLoaders,
+            DocumentImportSettings settings,
+            LocalDocumentStorage storage,
+            Clock clock) {
+        return new DocumentImportWorker(
+                taskRepository, ingestionService, parser, sourceLoaders, settings, storage, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.document",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    TrustRagDocumentImportScheduler trustRagDocumentImportScheduler(
+            DocumentImportWorker worker) {
+        return new TrustRagDocumentImportScheduler(worker);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    RetrievalMetricCalculator retrievalMetricCalculator() {
+        return new RetrievalMetricCalculator();
+    }
+
+    @Bean(name = "trustRagEvaluationExecutor")
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean(name = "trustRagEvaluationExecutor")
+    ThreadPoolTaskExecutor trustRagEvaluationExecutor(TrustRagProperties properties) {
+        int poolSize = Math.max(1, properties.getEvaluation().getRunner().getThreadPoolSize());
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(poolSize);
+        executor.setMaxPoolSize(poolSize);
+        executor.setQueueCapacity(poolSize * 100);
+        executor.setThreadNamePrefix("trust-rag-eval-");
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    GenerationJudgeService generationJudgeService(
+            ObjectProvider<LlmClient> llmClient,
+            ObjectMapper objectMapper,
+            EvaluationOptions options,
+            Clock clock) {
+        LlmClient client = llmClient.getIfAvailable();
+        return options.judge().enabled() && client != null
+                ? new DefaultGenerationJudgeService(client, objectMapper, options.judge(), clock)
+                : new NoOpGenerationJudgeService();
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    EvalReportService evalReportService(
+            EvaluationRepository repository,
+            ObjectMapper objectMapper,
+            Clock clock) {
+        return new EvalReportService(repository, objectMapper, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    EvalRunner evalRunner(
+            EvaluationRepository repository,
+            EvalTraceReader traceReader,
+            TrustRagEngine engine,
+            RetrievalMetricCalculator metricCalculator,
+            GenerationJudgeService judgeService,
+            EvalReportService reportService,
+            Clock clock) {
+        return new DefaultEvalRunner(
+                repository, traceReader, engine, metricCalculator,
+                judgeService, reportService, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    EvalRunService evalRunService(
+            EvaluationRepository repository,
+            EvalRunner runner,
+            @Qualifier("trustRagEvaluationExecutor") Executor executor,
+            Clock clock) {
+        return new EvalRunService(repository, runner, executor, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    EvalDatasetService evalDatasetService(EvaluationRepository repository, Clock clock) {
+        return new EvalDatasetService(repository, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    EvalCaseService evalCaseService(EvaluationRepository repository, Clock clock) {
+        return new EvalCaseService(repository, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    GovernanceMetricService governanceMetricService(EvaluationRepository repository, Clock clock) {
+        return new GovernanceMetricService(repository, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.evaluation.governance",
+            name = "snapshot-enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    TrustRagEvaluationScheduler trustRagEvaluationScheduler(
+            GovernanceMetricService governanceMetricService) {
+        return new TrustRagEvaluationScheduler(governanceMetricService);
     }
 
     @Bean
@@ -447,7 +948,7 @@ public class TrustRagAutoConfiguration {
             ReviewTaskRepository reviewTaskRepository,
             KnowledgeLineageRepository lineageRepository,
             EmbeddingClient embeddingClient,
-            KnowledgeVectorStore vectorStore,
+            KnowledgeIndexService indexService,
             ObjectProvider<ReviewCallback> callbacks,
             TransactionRunner transactionRunner,
             KnowledgeStateMachine stateMachine,
@@ -455,7 +956,7 @@ public class TrustRagAutoConfiguration {
         List<ReviewCallback> callbackList = callbacks.orderedStream().toList();
         return new KnowledgeReviewService(
                 knowledgeRepository, reviewTaskRepository, lineageRepository,
-                embeddingClient, vectorStore, callbackList, transactionRunner,
+                embeddingClient, indexService, callbackList, transactionRunner,
                 stateMachine, clock);
     }
 
@@ -518,7 +1019,7 @@ public class TrustRagAutoConfiguration {
             ReviewTaskRepository reviewTaskRepository,
             KnowledgeLineageRepository lineageRepository,
             EmbeddingClient embeddingClient,
-            KnowledgeVectorStore vectorStore,
+            KnowledgeIndexService indexService,
             PrivacyFilter privacyFilter,
             DuplicateDetector duplicateDetector,
             LlmPreReviewer preReviewer,
@@ -531,7 +1032,7 @@ public class TrustRagAutoConfiguration {
             Clock clock) {
         return new DefaultKnowledgePromotionEngine(
                 knowledgeRepository, reviewTaskRepository, lineageRepository,
-                embeddingClient, vectorStore, privacyFilter, duplicateDetector,
+                embeddingClient, indexService, privacyFilter, duplicateDetector,
                 preReviewer, evidenceVerifier, conflictDetector, options,
                 lifecycleOptions, stateMachine, transactionRunner, clock);
     }
@@ -541,11 +1042,13 @@ public class TrustRagAutoConfiguration {
     PromotionTaskService promotionTaskService(
             KnowledgeRepository knowledgeRepository,
             PromotionTaskRepository taskRepository,
+            KnowledgeLineageRepository lineageRepository,
             KnowledgeStateMachine stateMachine,
             TransactionRunner transactionRunner,
             Clock clock) {
         return new PromotionTaskService(
-                knowledgeRepository, taskRepository, stateMachine, transactionRunner, clock);
+                knowledgeRepository, taskRepository, lineageRepository,
+                stateMachine, transactionRunner, clock);
     }
 
     @Bean
@@ -553,11 +1056,13 @@ public class TrustRagAutoConfiguration {
     KnowledgePromotionWorker knowledgePromotionWorker(
             PromotionTaskRepository taskRepository,
             KnowledgeRepository knowledgeRepository,
+            KnowledgeLineageRepository lineageRepository,
             KnowledgePromotionEngine engine,
             PromotionOptions options,
             Clock clock) {
         return new KnowledgePromotionWorker(
-                taskRepository, knowledgeRepository, engine, options.retryLimit(), clock);
+                taskRepository, knowledgeRepository, lineageRepository,
+                engine, options.retryLimit(), clock);
     }
 
     @Bean
@@ -566,16 +1071,50 @@ public class TrustRagAutoConfiguration {
             KnowledgeRepository knowledgeRepository,
             ReviewTaskRepository reviewTaskRepository,
             KnowledgeLineageRepository lineageRepository,
+            PromotionTaskRepository promotionTaskRepository,
             EmbeddingClient embeddingClient,
-            KnowledgeVectorStore vectorStore,
+            KnowledgeIndexService indexService,
             KnowledgeStateMachine stateMachine,
             LifecycleOptions options,
             TransactionRunner transactionRunner,
             Clock clock) {
         return new DefaultKnowledgeLifecycleManager(
                 knowledgeRepository, reviewTaskRepository, lineageRepository,
-                embeddingClient, vectorStore, stateMachine, options,
+                promotionTaskRepository, embeddingClient, indexService, stateMachine, options,
                 transactionRunner, clock);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    IndexSyncWorker indexSyncWorker(
+            IndexSyncTaskRepository taskRepository,
+            KnowledgeRepository knowledgeRepository,
+            ReviewTaskRepository reviewTaskRepository,
+            KnowledgeLineageRepository lineageRepository,
+            EmbeddingClient embeddingClient,
+            KnowledgeVectorStore vectorStore,
+            KnowledgeKeywordStore keywordStore,
+            TransactionRunner transactionRunner,
+            TrustRagProperties properties,
+            Clock clock) {
+        return new IndexSyncWorker(
+                taskRepository, knowledgeRepository, reviewTaskRepository,
+                lineageRepository, embeddingClient, vectorStore, keywordStore,
+                transactionRunner, properties.getIndexSync().getRetryLimit(), clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "trust-rag.index-sync",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean
+    TrustRagIndexSyncScheduler trustRagIndexSyncScheduler(
+            IndexSyncWorker worker,
+            TrustRagProperties properties) {
+        return new TrustRagIndexSyncScheduler(
+                worker, properties.getIndexSync().getBatchSize());
     }
 
     @Bean

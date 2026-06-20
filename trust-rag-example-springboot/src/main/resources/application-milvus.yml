@@ -18,7 +18,26 @@ trust-rag:
     enabled: true
     uri: http://localhost:19530
     database: default
-    collection: trust_rag_knowledge
+    collection: trust_rag_knowledge_vector
     dimension: 64
     metric-type: COSINE
+    vector-top-k: 30
     auto-create-collection: true
+  opensearch:
+    enabled: true
+    uris:
+      - http://localhost:9200
+    index-name: trust_rag_knowledge_keyword
+    keyword-top-k: 30
+    auto-create-index: true
+  retrieval:
+    mode: hybrid-rrf
+    prompt-top-k: 5
+    fusion-top-n: 30
+  rrf:
+    enabled: true
+    k: 60
+  trust-boost:
+    high: 1.0
+    medium: 0.92
+    low: 0.80

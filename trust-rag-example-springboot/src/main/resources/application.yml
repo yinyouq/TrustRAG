@@ -13,6 +13,10 @@ spring:
     init:
       mode: always
       schema-locations: classpath:db/schema-h2.sql
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
 
 trust-rag:
   enabled: true
@@ -25,11 +29,27 @@ trust-rag:
   milvus:
     enabled: false
     dimension: 64
+  opensearch:
+    enabled: false
   retrieval:
+    mode: hybrid-rrf
+    prompt-top-k: 5
+    fusion-top-n: 30
     high-trust-top-k: 5
     medium-trust-top-k: 3
-    low-trust-top-k: 3
+    low-conversation-top-k: 2
+    low-user-top-k: 2
+    low-project-top-k: 2
+    low-tenant-top-k: 2
+    low-global-candidate-top-k: 1
     min-vector-score: 0.10
+  rrf:
+    enabled: true
+    k: 60
+  trust-boost:
+    high: 1.0
+    medium: 0.92
+    low: 0.80
   promotion:
     min-promotion-score: 0.55
     min-source-score: 0.60
@@ -38,6 +58,16 @@ trust-rag:
     save-prompt: false
   admin-api:
     enabled: true
+  document:
+    enabled: true
+    storage-path: ./data/trust-rag/documents
+    max-upload-bytes: 52428800
+    max-git-file-bytes: 2097152
+    max-git-files: 500
+    keep-source-files: true
+    git-remote-enabled: false
+    git-allowed-local-roots:
+      - ./data/trust-rag/git-sources
 
 server:
   port: 8080

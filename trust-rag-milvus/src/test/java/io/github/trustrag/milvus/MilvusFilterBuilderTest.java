@@ -41,5 +41,8 @@ class MilvusFilterBuilderTest {
                 0.5));
 
         assertThat(filter.expression()).contains("scope_type == \"GLOBAL\"", "project_id == {projectId}");
+        assertThat(filter.expression()).contains("trust_level in {trustedGlobalLevels}");
+        assertThat(filter.templateValues())
+                .containsEntry("trustedGlobalLevels", List.of("HIGH"));
     }
 }

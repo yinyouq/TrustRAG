@@ -26,8 +26,7 @@ public enum KnowledgeStatus {
     public boolean isPromotionCandidate() {
         return this == LOW_PENDING
                 || this == LOW_ENABLED
-                || this == PROMOTION_PENDING
-                || this == INDEX_FAILED;
+                || this == PROMOTION_PENDING;
     }
 
     public boolean isHumanReviewable() {

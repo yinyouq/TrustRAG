@@ -51,6 +51,7 @@ public final class KnowledgeStateMachine {
         values.put(KnowledgeStatus.PROMOTION_RUNNING, EnumSet.of(
                 KnowledgeStatus.PROMOTION_PENDING,
                 KnowledgeStatus.LOW_ENABLED,
+                KnowledgeStatus.MEDIUM_ENABLED,
                 KnowledgeStatus.HUMAN_REVIEW_PENDING,
                 KnowledgeStatus.REJECTED,
                 KnowledgeStatus.CONFLICT,
@@ -75,12 +76,17 @@ public final class KnowledgeStateMachine {
                 KnowledgeStatus.MERGE_PENDING,
                 KnowledgeStatus.ROLLBACK));
         values.put(KnowledgeStatus.HIGH_ENABLED, EnumSet.of(
+                KnowledgeStatus.INDEXING,
                 KnowledgeStatus.MEDIUM_ENABLED,
                 KnowledgeStatus.EXPIRED,
                 KnowledgeStatus.ROLLBACK,
                 KnowledgeStatus.REJECTED));
         values.put(KnowledgeStatus.INDEX_FAILED, EnumSet.of(
                 KnowledgeStatus.INDEXING,
+                KnowledgeStatus.HIGH_ENABLED,
+                KnowledgeStatus.MEDIUM_ENABLED,
+                KnowledgeStatus.HUMAN_REVIEW_PENDING,
+                KnowledgeStatus.LOW_ENABLED,
                 KnowledgeStatus.PROMOTION_PENDING,
                 KnowledgeStatus.PROMOTION_RUNNING,
                 KnowledgeStatus.REJECTED));

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.trustrag.core.model.RagTrace;
 import io.github.trustrag.core.model.RetrievedChunk;
+import io.github.trustrag.core.model.SearchType;
 import io.github.trustrag.core.spi.RagTraceRepository;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -32,12 +33,14 @@ public class JdbcRagTraceRepository implements RagTraceRepository {
         jdbc.update("""
                 INSERT INTO rag_trace (
                     trace_id, user_id, conversation_id, project_id, tenant_id,
+                    trace_type, eval_run_id, eval_case_id,
                     question, rewritten_query, final_prompt, answer,
                     max_vector_score, avg_vector_score, max_rerank_score, answer_confidence,
                     possible_gap, gap_score, gap_types, gap_reason,
                     prompt_tokens, completion_tokens, latency_ms, status, error_message, created_at
                 ) VALUES (
                     :traceId, :userId, :conversationId, :projectId, :tenantId,
+                    :traceType, :evalRunId, :evalCaseId,
                     :question, :rewrittenQuery, :finalPrompt, :answer,
                     :maxVectorScore, :avgVectorScore, :maxRerankScore, :answerConfidence,
                     :possibleGap, :gapScore, :gapTypes, :gapReason,
@@ -79,12 +82,12 @@ public class JdbcRagTraceRepository implements RagTraceRepository {
         String sql = """
                 INSERT INTO retrieval_log (
                     trace_id, knowledge_id, query, search_type, vector_score, keyword_score,
-                    rerank_score, trust_score, final_score, trust_level, scope_type,
-                    rank_no, used_in_prompt, created_at
+                    vector_rank, keyword_rank, rrf_score, rerank_score, trust_score,
+                    final_score, trust_level, scope_type, rank_no, used_in_prompt, created_at
                 ) VALUES (
                     :traceId, :knowledgeId, :query, :searchType, :vectorScore, :keywordScore,
-                    :rerankScore, :trustScore, :finalScore, :trustLevel, :scopeType,
-                    :rankNo, :usedInPrompt, :createdAt
+                    :vectorRank, :keywordRank, :rrfScore, :rerankScore, :trustScore,
+                    :finalScore, :trustLevel, :scopeType, :rankNo, :usedInPrompt, :createdAt
                 )
                 """;
         MapSqlParameterSource[] batch = new MapSqlParameterSource[ranked.size()];
@@ -94,9 +97,16 @@ public class JdbcRagTraceRepository implements RagTraceRepository {
                     .addValue("traceId", trace.traceId())
                     .addValue("knowledgeId", chunk.knowledgeId())
                     .addValue("query", query)
-                    .addValue("searchType", "VECTOR")
-                    .addValue("vectorScore", chunk.vectorScore())
-                    .addValue("keywordScore", null)
+                    .addValue("searchType", chunk.searchType().name())
+                    .addValue(
+                            "vectorScore",
+                            chunk.searchType() == SearchType.KEYWORD_ONLY
+                                    ? null
+                                    : chunk.vectorScore())
+                    .addValue("keywordScore", chunk.keywordScore())
+                    .addValue("vectorRank", chunk.vectorRank())
+                    .addValue("keywordRank", chunk.keywordRank())
+                    .addValue("rrfScore", chunk.rrfScore())
                     .addValue("rerankScore", chunk.rerankScore())
                     .addValue("trustScore", chunk.trustScore())
                     .addValue("finalScore", chunk.finalScore())
@@ -116,6 +126,9 @@ public class JdbcRagTraceRepository implements RagTraceRepository {
                 .addValue("conversationId", trace.conversationId())
                 .addValue("projectId", trace.projectId())
                 .addValue("tenantId", trace.tenantId())
+                .addValue("traceType", trace.traceType().name())
+                .addValue("evalRunId", trace.evalRunId())
+                .addValue("evalCaseId", trace.evalCaseId())
                 .addValue("question", trace.originalQuestion())
                 .addValue("rewrittenQuery", json(trace.rewrittenQueries()))
                 .addValue("finalPrompt", trace.finalPrompt())

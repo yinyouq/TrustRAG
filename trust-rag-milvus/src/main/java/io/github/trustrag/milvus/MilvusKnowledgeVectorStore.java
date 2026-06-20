@@ -37,6 +37,7 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
     private final MilvusSettings settings;
     private final MilvusFilterBuilder filterBuilder;
     private final Gson gson = new Gson();
+    private volatile boolean initialized;
 
     public MilvusKnowledgeVectorStore(
             MilvusClientV2 client,
@@ -48,7 +49,10 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
     }
 
     @Override
-    public void initialize() {
+    public synchronized void initialize() {
+        if (initialized) {
+            return;
+        }
         boolean exists = client.hasCollection(HasCollectionReq.builder()
                 .databaseName(settings.database())
                 .collectionName(settings.collection())
@@ -65,10 +69,12 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
                 .databaseName(settings.database())
                 .collectionName(settings.collection())
                 .build());
+        initialized = true;
     }
 
     @Override
     public void upsert(KnowledgeItem knowledge, List<Float> vector) {
+        ensureInitialized();
         if (knowledge.id() == null) {
             throw new IllegalArgumentException("Knowledge id is required for Milvus upsert");
         }
@@ -99,6 +105,7 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
 
     @Override
     public void delete(long knowledgeId) {
+        ensureInitialized();
         client.delete(DeleteReq.builder()
                 .databaseName(settings.database())
                 .collectionName(settings.collection())
@@ -108,6 +115,7 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
 
     @Override
     public List<VectorHit> search(VectorSearchRequest request) {
+        ensureInitialized();
         if (request.vector().size() != settings.dimension()) {
             throw new IllegalArgumentException(
                     "Search vector dimension mismatch: expected " + settings.dimension()
@@ -180,6 +188,12 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
                 .indexParams(List.of(vectorIndex))
                 .enableDynamicField(false)
                 .build());
+    }
+
+    private void ensureInitialized() {
+        if (!initialized) {
+            initialize();
+        }
     }
 
     private AddFieldReq field(

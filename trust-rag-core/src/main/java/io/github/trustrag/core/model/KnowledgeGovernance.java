@@ -87,6 +87,25 @@ public record KnowledgeGovernance(
                 tags, trustLevel, status);
     }
 
+    public KnowledgeGovernance withStage(String stage) {
+        return copy(
+                stage, promotionScore, llmPreReviewResult, normalizedClaim, claimHash,
+                llmScore, sourceScore, evidenceScore, feedbackScore, usageScore, generalValueScore,
+                privacyRisk, conflictRisk, staleRisk, applicableVersion, validFrom, validTo,
+                sourceTime, lastVerifiedAt, usageCount, positiveFeedbackCount, negativeFeedbackCount,
+                tags, previousTrustLevel, previousStatus);
+    }
+
+    public KnowledgeGovernance withPrivacyRisk(double risk) {
+        return copy(
+                promotionStage, promotionScore, llmPreReviewResult, normalizedClaim, claimHash,
+                llmScore, sourceScore, evidenceScore, feedbackScore, usageScore, generalValueScore,
+                Math.max(privacyRisk == null ? 0.0 : privacyRisk, risk),
+                conflictRisk, staleRisk, applicableVersion, validFrom, validTo,
+                sourceTime, lastVerifiedAt, usageCount, positiveFeedbackCount, negativeFeedbackCount,
+                tags, previousTrustLevel, previousStatus);
+    }
+
     public KnowledgeGovernance withLifecycle(
             String version,
             Instant from,

@@ -22,6 +22,18 @@
         </dependency>
         <dependency>
             <groupId>io.github.trustrag</groupId>
+            <artifactId>trust-rag-opensearch</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.trustrag</groupId>
+            <artifactId>trust-rag-document</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.trustrag</groupId>
+            <artifactId>trust-rag-evaluation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.trustrag</groupId>
             <artifactId>trust-rag-storage-jdbc</artifactId>
         </dependency>
         <dependency>

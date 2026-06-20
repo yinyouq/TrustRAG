@@ -1,0 +1,8 @@
+packages:
+  - .
+
+allowBuilds:
+  msw: false
+
+ignoredBuiltDependencies:
+  - msw

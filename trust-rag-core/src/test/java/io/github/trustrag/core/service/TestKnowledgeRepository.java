@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
 final class TestKnowledgeRepository implements KnowledgeRepository {
 
     private final Map<Long, KnowledgeItem> items = new LinkedHashMap<>();
+    private final Map<Long, Integer> usageIncrements = new LinkedHashMap<>();
     private final AtomicLong ids = new AtomicLong();
 
     @Override
@@ -112,7 +113,13 @@ final class TestKnowledgeRepository implements KnowledgeRepository {
 
     @Override
     public List<KnowledgeItem> findExpired(Instant now, int limit) {
-        return List.of();
+        return items.values().stream()
+                .filter(item -> item.status().isRetrievable())
+                .filter(item -> (item.expiresAt() != null && item.expiresAt().isBefore(now))
+                        || (item.governance().validTo() != null
+                        && item.governance().validTo().isBefore(now)))
+                .limit(limit)
+                .toList();
     }
 
     @Override
@@ -122,6 +129,7 @@ final class TestKnowledgeRepository implements KnowledgeRepository {
 
     @Override
     public void incrementUsageCount(long knowledgeId) {
+        usageIncrements.merge(knowledgeId, 1, Integer::sum);
     }
 
     @Override
@@ -129,5 +137,9 @@ final class TestKnowledgeRepository implements KnowledgeRepository {
             Collection<Long> knowledgeIds,
             boolean positive,
             boolean negative) {
+    }
+
+    int usageIncrements(long knowledgeId) {
+        return usageIncrements.getOrDefault(knowledgeId, 0);
     }
 }

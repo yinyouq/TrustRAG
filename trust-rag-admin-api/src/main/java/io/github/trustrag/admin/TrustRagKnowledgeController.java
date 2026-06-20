@@ -86,6 +86,7 @@ public final class TrustRagKnowledgeController {
                 TrustLevel.LOW,
                 KnowledgeStatus.LOW_PENDING,
                 0.80,
+                0.0,
                 request.tags());
         return candidateService.submit(candidate, request.scopeContext());
     }

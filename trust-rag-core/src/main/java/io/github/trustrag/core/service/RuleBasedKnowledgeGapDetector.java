@@ -26,7 +26,8 @@ public final class RuleBasedKnowledgeGapDetector implements KnowledgeGapDetector
         if (trace.retrievedChunks().isEmpty()) {
             score += 0.90;
             types.add(KnowledgeGapType.NO_RETRIEVAL);
-        } else if (trace.maxVectorScore() < options.lowVectorScoreThreshold()) {
+        } else if (!hasKeywordSignal(trace)
+                && trace.maxVectorScore() < options.lowVectorScoreThreshold()) {
             score += 0.30;
             types.add(KnowledgeGapType.LOW_RETRIEVAL_SCORE);
         }
@@ -65,5 +66,10 @@ public final class RuleBasedKnowledgeGapDetector implements KnowledgeGapDetector
                 .filter(value -> value != null && !value.isBlank())
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .anyMatch(normalized::contains);
+    }
+
+    private boolean hasKeywordSignal(RagTrace trace) {
+        return trace.retrievedChunks().stream()
+                .anyMatch(chunk -> chunk.keywordRank() != null);
     }
 }

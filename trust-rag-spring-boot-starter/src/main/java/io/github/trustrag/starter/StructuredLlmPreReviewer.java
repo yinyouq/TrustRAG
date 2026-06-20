@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.trustrag.core.model.KnowledgeItem;
 import io.github.trustrag.core.model.PreReviewResult;
 import io.github.trustrag.core.model.PromotionAction;
+import io.github.trustrag.core.exception.TrustRagException;
 import io.github.trustrag.core.spi.LlmClient;
 import io.github.trustrag.core.spi.LlmPreReviewer;
 
@@ -27,6 +28,8 @@ public final class StructuredLlmPreReviewer implements LlmPreReviewer {
             evidence: %s
             sourceType: %s
             sourceRef: %s
+            Similar knowledge:
+            %s
             """;
 
     private final LlmClient llmClient;
@@ -41,9 +44,13 @@ public final class StructuredLlmPreReviewer implements LlmPreReviewer {
     public PreReviewResult review(KnowledgeItem candidate, List<KnowledgeItem> similarKnowledge) {
         String raw = llmClient.generate(PROMPT.formatted(
                 text(candidate.title()), text(candidate.claim()), text(candidate.content()),
-                text(candidate.evidence()), text(candidate.sourceType()), text(candidate.sourceRef()))).text();
+                text(candidate.evidence()), text(candidate.sourceType()), text(candidate.sourceRef()),
+                similarKnowledge(similarKnowledge))).text();
         try {
             JsonNode json = objectMapper.readTree(stripFence(raw));
+            if (!json.isObject()) {
+                throw new IllegalArgumentException("pre-review output is not a JSON object");
+            }
             return new PreReviewResult(
                     score(json, "qualityScore"),
                     score(json, "generalValueScore"),
@@ -55,8 +62,8 @@ public final class StructuredLlmPreReviewer implements LlmPreReviewer {
                     tags(json.path("tags")),
                     raw);
         } catch (Exception exception) {
-            return PreReviewResult.conservative(
-                    effectiveClaim(candidate), "Invalid LLM pre-review JSON: " + exception.getMessage());
+            throw new TrustRagException(
+                    "Invalid LLM pre-review JSON: " + exception.getMessage(), exception);
         }
     }
 
@@ -98,5 +105,16 @@ public final class StructuredLlmPreReviewer implements LlmPreReviewer {
 
     private String text(String value) {
         return value == null ? "" : value;
+    }
+
+    private String similarKnowledge(List<KnowledgeItem> values) {
+        if (values == null || values.isEmpty()) {
+            return "(none)";
+        }
+        return values.stream()
+                .limit(10)
+                .map(item -> "- [" + item.trustLevel().name() + "] " + effectiveClaim(item))
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse("(none)");
     }
 }

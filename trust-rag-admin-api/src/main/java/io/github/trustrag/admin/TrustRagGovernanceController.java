@@ -91,6 +91,26 @@ public final class TrustRagGovernanceController {
                 Math.max(offset, 0));
     }
 
+    @GetMapping("/knowledge")
+    public List<KnowledgeItem> knowledge(
+            @RequestParam(required = false) String trustLevel,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        TrustLevel parsedTrust = enumValue(TrustLevel.class, trustLevel);
+        KnowledgeStatus parsedStatus = enumValue(KnowledgeStatus.class, status);
+        if (parsedTrust == null) {
+            parsedTrust = TrustLevel.MEDIUM;
+        }
+        Set<KnowledgeStatus> statuses = parsedStatus == null
+                ? defaultStatuses(parsedTrust)
+                : Set.of(parsedStatus);
+        return knowledgeRepository.findByTrustAndStatuses(
+                parsedTrust, statuses,
+                Math.min(Math.max(limit, 1), 200),
+                Math.max(offset, 0));
+    }
+
     @PostMapping("/knowledge/{id}/downgrade")
     public KnowledgeItem downgrade(
             @PathVariable long id,
@@ -112,10 +132,30 @@ public final class TrustRagGovernanceController {
         return lifecycleManager.merge(request.sourceKnowledgeIds(), id, request.operatorId());
     }
 
+    @PostMapping("/knowledge/merge")
+    public KnowledgeItem merge(@Valid @RequestBody MergeToTargetRequest request) {
+        return lifecycleManager.merge(
+                request.sourceKnowledgeIds(), request.targetKnowledgeId(), request.operatorId());
+    }
+
     private <T extends Enum<T>> T enumValue(Class<T> type, String value) {
         return value == null || value.isBlank()
                 ? null
                 : Enum.valueOf(type, value.toUpperCase(Locale.ROOT));
+    }
+
+    private Set<KnowledgeStatus> defaultStatuses(TrustLevel trustLevel) {
+        return switch (trustLevel) {
+            case HIGH -> Set.of(KnowledgeStatus.HIGH_ENABLED);
+            case MEDIUM -> Set.of(
+                    KnowledgeStatus.MEDIUM_ENABLED,
+                    KnowledgeStatus.HUMAN_REVIEW_PENDING);
+            case LOW -> Set.of(
+                    KnowledgeStatus.LOW_PENDING,
+                    KnowledgeStatus.LOW_ENABLED,
+                    KnowledgeStatus.PROMOTION_PENDING,
+                    KnowledgeStatus.PROMOTION_RUNNING);
+        };
     }
 
     public record PromotionRunResponse(int createdTasks, int processedTasks) {
@@ -126,6 +166,12 @@ public final class TrustRagGovernanceController {
 
     public record MergeRequest(
             @NotBlank String operatorId,
+            @NotEmpty List<Long> sourceKnowledgeIds) {
+    }
+
+    public record MergeToTargetRequest(
+            @NotBlank String operatorId,
+            long targetKnowledgeId,
             @NotEmpty List<Long> sourceKnowledgeIds) {
     }
 }
