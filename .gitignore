@@ -53,3 +53,6 @@ Desktop.ini
 *.swp
 *.swo
 *~
+
+# Superpowers visual brainstorming sessions
+.superpowers/
