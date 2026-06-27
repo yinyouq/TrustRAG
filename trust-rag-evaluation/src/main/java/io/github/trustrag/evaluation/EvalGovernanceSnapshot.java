@@ -3,6 +3,9 @@ package io.github.trustrag.evaluation;
 import java.time.Instant;
 import java.time.LocalDate;
 
+/**
+ * EvalGovernanceSnapshot 表示某一时刻的治理指标快照，用于趋势分析。
+ */
 public record EvalGovernanceSnapshot(
         Long id,
         String tenantId,

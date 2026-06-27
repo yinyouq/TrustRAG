@@ -1,5 +1,8 @@
 package io.github.trustrag.core.config;
 
+/**
+ * PromotionOptions 保存一组不可变运行选项，供核心策略在执行时读取。
+ */
 public record PromotionOptions(
         boolean enabled,
         int batchSize,

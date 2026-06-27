@@ -10,6 +10,9 @@ import org.springframework.jdbc.support.KeyHolder;
 import java.sql.Timestamp;
 import java.time.Instant;
 
+/**
+ * JdbcFeedbackRepository 是关系型数据库仓储实现，负责对应业务数据的读写和状态更新。
+ */
 public final class JdbcFeedbackRepository implements FeedbackRepository {
 
     private final NamedParameterJdbcTemplate jdbc;

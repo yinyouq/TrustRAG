@@ -1,4 +1,5 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+// 测试用例表单抽屉，复用创建和编辑用例的输入逻辑。
 import { reactive, watch } from 'vue'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import type { EvalCase, EvalCasePayload, ExpectedKnowledge, ExpectedKnowledgePayload } from '@/api/types'

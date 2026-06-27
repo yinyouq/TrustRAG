@@ -18,6 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * JdbcPromotionTaskRepository 是关系型数据库仓储实现，负责对应业务数据的读写和状态更新。
+ */
 public final class JdbcPromotionTaskRepository implements PromotionTaskRepository {
 
     private final NamedParameterJdbcTemplate jdbc;

@@ -2,6 +2,9 @@ package io.github.trustrag.core.model;
 
 import java.util.List;
 
+/**
+ * CandidateKnowledge 是不可变领域数据对象，用于在服务之间传递结构化信息。
+ */
 public record CandidateKnowledge(
         String title,
         String claim,

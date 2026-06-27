@@ -2,6 +2,9 @@ package io.github.trustrag.evaluation;
 
 import java.time.Instant;
 
+/**
+ * EvalResult 封装一次领域操作的结果，便于调用方读取结构化指标。
+ */
 public record EvalResult(
         Long id,
         Long evalRunId,

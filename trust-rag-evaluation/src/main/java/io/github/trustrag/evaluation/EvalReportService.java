@@ -10,6 +10,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 
+/**
+ * 评估报告服务。
+ *
+ * <p>把逐题结果聚合为运行级报告，并支持 Before/After 差值对比。</p>
+ */
 public final class EvalReportService {
 
     private final EvaluationRepository repository;
@@ -58,6 +63,7 @@ public final class EvalReportService {
                 .orElseGet(() -> buildReport(beforeRunId));
         EvalReport after = repository.findReportByRunId(afterRunId)
                 .orElseGet(() -> buildReport(afterRunId));
+        // 对比报告使用已保存报告，缺失时即时重建，保证前端无需关心报告是否预先生成。
         EvalCompareReport report = new EvalCompareReport(
                 null,
                 beforeRunId,
@@ -78,6 +84,7 @@ public final class EvalReportService {
         double generationDelta = value(delta(before.avgFaithfulness(), after.avgFaithfulness()))
                 + value(delta(before.avgAnswerCorrectness(), after.avgAnswerCorrectness()))
                 - value(delta(before.avgHallucinationScore(), after.avgHallucinationScore()));
+        // 幻觉率越低越好，因此对总分使用负向 delta。
         double score = retrievalDelta + generationDelta;
         if (score > 0.02) {
             return "after run improved overall";
@@ -126,6 +133,7 @@ public final class EvalReportService {
             return null;
         }
         latencies.sort(Comparator.naturalOrder());
+        // 使用 nearest-rank 计算 p90，和大多数监控面板的展示方式一致。
         int index = (int) Math.ceil(percentile * latencies.size()) - 1;
         return (double) latencies.get(Math.max(0, Math.min(index, latencies.size() - 1)));
     }

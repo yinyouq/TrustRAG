@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Locale;
 import java.util.Optional;
 
+/**
+ * TrustRagFeedbackController 的 REST 接口入口，负责把 HTTP 请求转换为领域服务调用。
+ */
 @RestController
 @RequestMapping("/trust-rag/feedback")
 public final class TrustRagFeedbackController {

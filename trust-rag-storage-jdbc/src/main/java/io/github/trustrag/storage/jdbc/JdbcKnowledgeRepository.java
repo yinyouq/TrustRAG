@@ -25,6 +25,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * knowledge_item 表的 JDBC 仓储实现。
+ *
+ * <p>关系库保存知识状态、治理指标和来源元数据，是外部检索索引之外的权威状态源。</p>
+ */
 public final class JdbcKnowledgeRepository implements KnowledgeRepository {
 
     private static final String COLUMNS = """
@@ -89,6 +94,7 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
             KnowledgeItem knowledge,
             KnowledgeStatus expectedStatus,
             int expectedVersion) {
+        // 异步索引、晋升和审核都依赖状态+版本双条件，防止旧任务覆盖新状态。
         String sql = updateSql(
                 "WHERE id=:id AND status=:expectedStatus AND version=:expectedVersion");
         MapSqlParameterSource parameters = parameters(knowledge)
@@ -282,6 +288,7 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
 
     private MapSqlParameterSource parameters(KnowledgeItem value) {
         KnowledgeGovernance governance = value.governance();
+        // KnowledgeItem 被拆成基础字段、governance 字段和 sourceMetadata 字段写入同一张表。
         return new MapSqlParameterSource()
                 .addValue("title", value.title())
                 .addValue("claim", value.claim())
@@ -345,6 +352,7 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
     }
 
     private KnowledgeItem mapRow(ResultSet rs, int rowNum) throws SQLException {
+        // 读库时重新组装不可变领域对象，业务层不感知表字段拆分细节。
         return new KnowledgeItem(
                 rs.getLong("id"),
                 rs.getString("title"),

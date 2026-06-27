@@ -7,6 +7,9 @@ import io.github.trustrag.core.util.ClaimNormalizer;
 
 import java.util.List;
 
+/**
+ * RuleBasedKnowledgeRelationJudge 承载 trust-rag-core 模块中的领域逻辑或基础设施适配职责。
+ */
 public final class RuleBasedKnowledgeRelationJudge implements KnowledgeRelationJudge {
 
     private static final List<String> NEGATIONS = List.of(

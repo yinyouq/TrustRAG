@@ -17,6 +17,9 @@ import java.util.Queue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 验证 DefaultGenerationJudgeService 的关键行为、边界条件和回归场景。
+ */
 class DefaultGenerationJudgeServiceTest {
 
     @Test

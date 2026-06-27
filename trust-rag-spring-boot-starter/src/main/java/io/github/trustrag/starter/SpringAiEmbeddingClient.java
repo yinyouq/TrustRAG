@@ -6,6 +6,9 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * SpringAiEmbeddingClient 适配外部客户端能力，向核心模块暴露统一 SPI。
+ */
 public final class SpringAiEmbeddingClient implements EmbeddingClient {
 
     private final EmbeddingModel embeddingModel;

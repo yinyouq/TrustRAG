@@ -6,6 +6,9 @@ import io.github.trustrag.core.spi.ScopeClassifier;
 
 import java.util.Locale;
 
+/**
+ * DefaultScopeClassifier 承载 trust-rag-core 模块中的领域逻辑或基础设施适配职责。
+ */
 public final class DefaultScopeClassifier implements ScopeClassifier {
 
     @Override

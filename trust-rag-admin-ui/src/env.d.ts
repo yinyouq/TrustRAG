@@ -1,3 +1,6 @@
+﻿/**
+ * Vite 环境类型声明，保证 TypeScript 能识别导入的运行时类型。
+ */
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {

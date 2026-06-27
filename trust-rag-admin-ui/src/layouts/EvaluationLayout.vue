@@ -1,4 +1,5 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+// EvaluationLayout 页面布局组件，承载评估台导航和公共页面框架。
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { Setting } from '@element-plus/icons-vue'

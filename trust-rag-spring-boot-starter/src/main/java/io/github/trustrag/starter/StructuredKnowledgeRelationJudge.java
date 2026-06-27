@@ -7,6 +7,11 @@ import io.github.trustrag.core.model.KnowledgeItem;
 import io.github.trustrag.core.spi.KnowledgeRelationJudge;
 import io.github.trustrag.core.spi.LlmClient;
 
+/**
+ * 结构化知识关系判定器。
+ *
+ * <p>优先使用 LLM 判断候选知识和既有知识的关系；模型输出不可解析时回退到规则判定器。</p>
+ */
 public final class StructuredKnowledgeRelationJudge implements KnowledgeRelationJudge {
 
     private static final String PROMPT = """
@@ -47,6 +52,7 @@ public final class StructuredKnowledgeRelationJudge implements KnowledgeRelation
             return new RelationJudgement(
                     type, confidence, json.path("reason").asText("No reason supplied"));
         } catch (Exception exception) {
+            // 关系判定是治理安全链路，LLM 不稳定时必须回到确定性规则。
             return fallback.judge(candidate, existing);
         }
     }

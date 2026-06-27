@@ -153,6 +153,12 @@ import java.util.concurrent.Executors;
 
 import io.github.trustrag.core.model.RetrievalMode;
 
+/**
+ * TrustRAG Spring Boot 自动装配入口。
+ *
+ * <p>该配置类把核心 SPI 默认绑定到 JDBC、Milvus、OpenSearch 和 Spring AI。
+ * 业务方可以通过自定义同类型 Bean 覆盖默认实现。</p>
+ */
 @AutoConfiguration(after = DataSourceAutoConfiguration.class)
 @EnableConfigurationProperties(TrustRagProperties.class)
 @EnableScheduling
@@ -296,6 +302,7 @@ public class TrustRagAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     KnowledgeRepository knowledgeRepository(DataSource dataSource, ObjectMapper objectMapper) {
+        // 默认持久化走关系库，便于治理状态和索引补偿任务保持事务一致。
         return new JdbcKnowledgeRepository(
                 new NamedParameterJdbcTemplate(dataSource), objectMapper);
     }

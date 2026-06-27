@@ -1,3 +1,6 @@
+﻿/**
+ * 评估管理 API 门面，封装数据集、用例、运行、报告和治理接口。
+ */
 import type { AxiosInstance } from 'axios'
 import type {
   EvalCase,
@@ -35,6 +38,11 @@ export interface ScopeFilters {
   projectId?: string | null
 }
 
+/**
+ * 评估管理台的 API 门面。
+ *
+ * 组件只依赖这里的领域方法，不直接拼接后端路径，方便后续替换网关前缀或 Mock 实现。
+ */
 export function createEvaluationApi(client: AxiosInstance) {
   return {
     async listDatasets(filters: DatasetFilters = {}) {
@@ -80,6 +88,7 @@ export function createEvaluationApi(client: AxiosInstance) {
       file: File,
       defaults: ScopeFilters & { userId?: string; conversationId?: string } = {},
     ) {
+      // CSV 上传走 multipart，作用域默认值放到 query，保持后端 ImportDefaults 的语义清晰。
       const body = new FormData()
       body.append('file', file)
       return (await client.post<EvalCaseCsvImportResult>('/cases/import-csv', body, {
@@ -108,6 +117,7 @@ export function createEvaluationApi(client: AxiosInstance) {
       return (await client.get<EvalJudgeDetail[]>(`/results/${resultId}/judge-details`)).data
     },
     async compareRuns(beforeRunId: number, afterRunId: number) {
+      // Before/After 对比只传运行 ID，具体指标差值由后端根据报告快照计算。
       return (await client.post<EvalCompareReport>('/compare', { beforeRunId, afterRunId })).data
     },
     async getGovernanceSummary(filters: ScopeFilters = {}) {

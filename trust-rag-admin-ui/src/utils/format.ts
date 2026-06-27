@@ -1,3 +1,8 @@
+/**
+ * 指标格式化工具。
+ *
+ * 后端指标大多以 0..1 的小数返回，页面统一在这里转换为百分比或可读时长。
+ */
 export function formatPercent(value: number | null | undefined): string {
   return value === null || value === undefined ? '--' : `${(value * 100).toFixed(1)}%`
 }

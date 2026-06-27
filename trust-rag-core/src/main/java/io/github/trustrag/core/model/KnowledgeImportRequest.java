@@ -1,5 +1,8 @@
 package io.github.trustrag.core.model;
 
+/**
+ * KnowledgeImportRequest 表示一次领域请求，承载调用方传入的业务参数。
+ */
 public record KnowledgeImportRequest(
         String title,
         String content,

@@ -2,6 +2,9 @@ package io.github.trustrag.core.spi;
 
 import java.util.List;
 
+/**
+ * EmbeddingClient 适配外部客户端能力，向核心模块暴露统一 SPI。
+ */
 public interface EmbeddingClient {
 
     List<Float> embed(String text);

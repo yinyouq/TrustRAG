@@ -5,6 +5,9 @@ import io.github.trustrag.core.spi.QueryRewriteService;
 
 import java.util.List;
 
+/**
+ * DefaultQueryRewriteService 封装一组业务用例，向上层提供清晰的领域操作入口。
+ */
 public final class DefaultQueryRewriteService implements QueryRewriteService {
 
     @Override

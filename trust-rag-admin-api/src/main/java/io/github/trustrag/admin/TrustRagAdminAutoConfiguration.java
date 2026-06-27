@@ -25,6 +25,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 
+/**
+ * Spring Boot 自动装配入口，按配置创建 TrustRAG 默认 Bean。
+ */
 @AutoConfiguration(afterName = "io.github.trustrag.starter.TrustRagAutoConfiguration")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = "trust-rag.admin-api", name = "enabled", havingValue = "true")

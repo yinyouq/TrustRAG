@@ -2,6 +2,9 @@ package io.github.trustrag.core.model;
 
 import java.time.Instant;
 
+/**
+ * IndexSyncTask 表示后台任务记录，跟踪任务状态、重试和错误信息。
+ */
 public record IndexSyncTask(
         Long id,
         long knowledgeId,

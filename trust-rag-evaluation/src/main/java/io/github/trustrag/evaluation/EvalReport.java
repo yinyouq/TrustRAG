@@ -2,6 +2,9 @@ package io.github.trustrag.evaluation;
 
 import java.time.Instant;
 
+/**
+ * EvalReport 表示评估或对比报告的结构化结果。
+ */
 public record EvalReport(
         Long id,
         Long evalRunId,

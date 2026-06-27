@@ -2,6 +2,9 @@ package io.github.trustrag.opensearch;
 
 import java.util.List;
 
+/**
+ * OpenSearchSettings 保存模块运行配置，避免基础设施参数散落在业务代码中。
+ */
 public record OpenSearchSettings(
         List<String> uris,
         String username,

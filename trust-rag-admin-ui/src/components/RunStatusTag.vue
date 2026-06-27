@@ -1,4 +1,5 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+// 运行状态标签组件，统一展示评估任务状态。
 import { computed } from 'vue'
 import type { EvalRunStatus } from '@/api/types'
 

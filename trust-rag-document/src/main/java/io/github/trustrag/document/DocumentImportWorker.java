@@ -9,6 +9,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * 文档导入 Worker，批量领取待处理任务并把解析出的片段写入知识池。
+ *
+ * <p>Worker 以资源为单位容错：单个文件或片段失败不会中断整批任务，
+ * 最终通过 COMPLETED/PARTIAL/FAILED 状态反映整体结果。</p>
+ */
 public final class DocumentImportWorker {
 
     private static final System.Logger LOGGER =
@@ -70,6 +76,7 @@ public final class DocumentImportWorker {
                 for (DocumentResource resource : source.resources()) {
                     documents++;
                     try {
+                        // 解析器输出的是可独立入库的章节，后续再交给核心入库服务切块和索引。
                         List<ParsedDocumentSection> parsed = parser.parse(
                                 resource.path(), resource.filename(),
                                 resource.contentType(), resource.sourceUrl());
@@ -145,6 +152,7 @@ public final class DocumentImportWorker {
                 ? "document://" + task.taskId()
                 : section.sourceUrl();
         if (section.pageNumber() != null) {
+            // PDF/Word 页码写入 sourceRef，方便问答引用回到原文位置。
             return base + (base.contains("#") ? "&" : "#") + "page=" + section.pageNumber();
         }
         return base;

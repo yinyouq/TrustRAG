@@ -27,6 +27,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * TrustRagGovernanceController 的 REST 接口入口，负责把 HTTP 请求转换为领域服务调用。
+ */
 @RestController
 @RequestMapping("/trust-rag/admin")
 public final class TrustRagGovernanceController {

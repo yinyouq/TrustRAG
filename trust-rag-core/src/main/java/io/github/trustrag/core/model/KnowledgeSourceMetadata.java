@@ -1,5 +1,8 @@
 package io.github.trustrag.core.model;
 
+/**
+ * KnowledgeSourceMetadata 保存来源元数据，帮助答案引用回溯到原始资料。
+ */
 public record KnowledgeSourceMetadata(
         String sourceTitle,
         String sourceUrl,

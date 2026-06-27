@@ -12,6 +12,12 @@ import io.github.trustrag.core.spi.LlmPreReviewer;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 结构化 LLM 预审器。
+ *
+ * <p>用于低可信候选晋升前的质量、证据和风险判断。输出必须是 JSON，
+ * 晋升引擎会把它和规则评分一起纳入最终决策。</p>
+ */
 public final class StructuredLlmPreReviewer implements LlmPreReviewer {
 
     private static final String PROMPT = """
@@ -75,6 +81,7 @@ public final class StructuredLlmPreReviewer implements LlmPreReviewer {
         try {
             return PromotionAction.valueOf(value);
         } catch (Exception exception) {
+            // 无法识别的动作按保守策略保留低可信，避免模型格式漂移导致误晋升。
             return PromotionAction.KEEP_LOW;
         }
     }

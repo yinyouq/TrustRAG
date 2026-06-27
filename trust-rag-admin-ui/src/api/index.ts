@@ -1,3 +1,6 @@
+﻿/**
+ * 评估管理台 API 实例装配，统一创建 HTTP 客户端和领域 API。
+ */
 import { createEvaluationApi } from './evaluation'
 import { createHttpClient } from './http'
 

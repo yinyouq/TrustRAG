@@ -1,3 +1,6 @@
+﻿/**
+ * 验证 comparison 的前端行为和边界场景。
+ */
 import { describe, expect, it } from 'vitest'
 import type { EvalRun } from '@/api/types'
 import { validateRunComparison } from './comparison'

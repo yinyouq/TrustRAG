@@ -8,6 +8,12 @@ import io.github.trustrag.core.spi.PromptCustomizer;
 import java.util.Comparator;
 import java.util.List;
 
+/**
+ * 默认 Prompt 构建器。
+ *
+ * <p>Prompt 会显式声明 high/medium/low 三类知识的可信边界，
+ * 并把知识块包进 knowledge 区域，降低知识文本被当成系统指令的风险。</p>
+ */
 public final class DefaultPromptBuilder implements PromptBuilder {
 
     private final List<PromptCustomizer> customizers;
@@ -45,6 +51,7 @@ public final class DefaultPromptBuilder implements PromptBuilder {
 
         String result = prompt.toString();
         for (PromptCustomizer customizer : customizers) {
+            // 自定义器只在默认安全骨架生成后追加或改写，便于业务方扩展领域措辞。
             result = customizer.customize(result, request, chunks);
         }
         return result;

@@ -7,6 +7,12 @@ import io.github.trustrag.core.service.TrustRagEngine;
 import java.time.Clock;
 import java.util.List;
 
+/**
+ * 默认评估运行器。
+ *
+ * <p>它逐条执行测试用例，复用真实 TrustRAG 引擎产生答案，再计算检索指标、
+ * 生成质量指标并汇总报告。评估模式会关闭知识缺口和候选抽取，避免评估本身改变知识库。</p>
+ */
 public final class DefaultEvalRunner implements EvalRunner {
 
     private final EvaluationRepository repository;
@@ -82,6 +88,7 @@ public final class DefaultEvalRunner implements EvalRunner {
     }
 
     private void runCase(EvalRun run, EvalCase evalCase) {
+        // evaluationMode 保证一次评估只观测系统行为，不触发候选知识回流。
         RagRequest request = RagRequest.builder()
                 .question(evalCase.question())
                 .tenantId(evalCase.tenantId())
@@ -97,6 +104,7 @@ public final class DefaultEvalRunner implements EvalRunner {
         RagAnswer answer = engine.ask(request);
         List<Long> retrievedIds = traceReader.findRetrievedKnowledgeIds(answer.traceId());
         if (retrievedIds.isEmpty()) {
+            // 某些测试存储不记录完整 trace，此时用实际进入 Prompt 的知识作为降级指标来源。
             retrievedIds = answer.usedKnowledge().stream().map(item -> item.knowledgeId()).toList();
         }
         List<ExpectedKnowledge> expected = repository.listExpectedKnowledge(evalCase.id());

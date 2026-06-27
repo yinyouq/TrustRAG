@@ -34,6 +34,12 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+/**
+ * 可信检索器，统一处理向量检索、关键词检索、RRF 融合和三池可见性过滤。
+ *
+ * <p>默认优先返回高可信知识，同时允许在明确作用域内召回低可信候选。
+ * 这样既能利用用户反馈形成的临时知识，又不会让低可信内容越权进入全局答案。</p>
+ */
 public final class TrustAwareRetriever {
 
     private static final System.Logger LOGGER = System.getLogger(TrustAwareRetriever.class.getName());
@@ -108,6 +114,7 @@ public final class TrustAwareRetriever {
             List<String> queries) {
         Map<Long, CandidateEnvelope> fused = new LinkedHashMap<>();
         for (String query : queries) {
+            // 混合检索允许向量和关键词任一路失败，另一条链路仍可提供降级结果。
             CompletableFuture<BranchResult<VectorHit>> vectorFuture =
                     CompletableFuture.supplyAsync(
                             () -> vectorSearch(query, scope, request), executor);
@@ -239,6 +246,7 @@ public final class TrustAwareRetriever {
             for (String query : queries) {
                 List<Float> vector = embeddingClient.embed(query);
                 validateDimension(vector);
+                // 向量模式分层召回：高可信优先，中可信补充，低可信只在明确作用域内参与。
                 merge(scores, searchLayer(
                         vector, scope, Set.of(TrustLevel.HIGH),
                         Set.of(KnowledgeStatus.HIGH_ENABLED),

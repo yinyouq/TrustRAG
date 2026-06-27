@@ -11,6 +11,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
+/**
+ * 本地上传文件存储。
+ *
+ * <p>所有文件都限制在配置的 storageRoot 内，写入时使用临时文件再移动，
+ * 避免半写入文件被 Worker 消费。</p>
+ */
 public final class LocalDocumentStorage {
 
     private final Path root;
@@ -65,6 +71,7 @@ public final class LocalDocumentStorage {
         try {
             Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException exception) {
+            // 部分文件系统不支持原子移动，退化为替换移动仍能保证目标路径受控。
             Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
         }
         return target;

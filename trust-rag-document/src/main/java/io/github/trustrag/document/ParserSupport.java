@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * 文档解析器共享的小工具。
+ */
 final class ParserSupport {
 
     private ParserSupport() {
@@ -41,6 +44,9 @@ final class ParserSupport {
                 .trim();
     }
 
+    /**
+     * 分节聚合器，把解析器读到的标题、路径、页码和正文合并为标准 ParsedDocumentSection。
+     */
     static final class Sections {
 
         private final String sourceTitle;
@@ -58,6 +64,7 @@ final class ParserSupport {
         }
 
         void begin(String newTitle, String newPath, Integer newPageNumber) {
+            // 新章节开始前先冲刷上一段内容，保证章节边界不串联。
             flush();
             title = newTitle == null || newTitle.isBlank() ? sourceTitle : newTitle.trim();
             path = newPath;

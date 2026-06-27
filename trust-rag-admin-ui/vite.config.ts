@@ -1,3 +1,6 @@
+﻿/**
+ * Vite 构建配置，定义 Vue 插件、路径别名和测试环境。
+ */
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'

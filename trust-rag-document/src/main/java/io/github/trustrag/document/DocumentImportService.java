@@ -7,6 +7,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Clock;
 
+/**
+ * 文档导入提交服务。
+ *
+ * <p>这里只负责校验来源、落临时文件和创建导入任务；真正的解析和入库由
+ * {@link DocumentImportWorker} 异步完成。</p>
+ */
 public final class DocumentImportService {
 
     private final DocumentImportTaskRepository taskRepository;
@@ -46,6 +52,7 @@ public final class DocumentImportService {
         try {
             var path = storage.store(filename, input, size);
             try {
+                // 任务保存失败时同步删除已落盘文件，避免产生无法追踪的孤儿文件。
                 return taskRepository.save(DocumentImportTask.pendingUpload(
                         path.getFileName().toString(),
                         contentType,
@@ -109,6 +116,7 @@ public final class DocumentImportService {
         try {
             java.net.URI uri = new java.net.URI(sourceUrl.trim());
             String scheme = uri.getScheme();
+            // sourceUrl 会进入知识来源，禁止携带凭证或非 HTTP(S) 协议。
             if (scheme == null || (!scheme.equalsIgnoreCase("https")
                     && !scheme.equalsIgnoreCase("http"))) {
                 throw new InvalidRagRequestException(

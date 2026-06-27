@@ -7,6 +7,9 @@ import io.github.trustrag.core.spi.KnowledgeKeywordStore;
 
 import java.util.List;
 
+/**
+ * NoOpKnowledgeKeywordStore 承载 trust-rag-core 模块中的领域逻辑或基础设施适配职责。
+ */
 public final class NoOpKnowledgeKeywordStore implements KnowledgeKeywordStore {
 
     @Override

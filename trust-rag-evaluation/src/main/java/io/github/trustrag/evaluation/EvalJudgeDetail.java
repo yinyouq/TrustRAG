@@ -2,6 +2,9 @@ package io.github.trustrag.evaluation;
 
 import java.time.Instant;
 
+/**
+ * EvalJudgeDetail 保存明细信息，帮助管理台展示诊断上下文。
+ */
 public record EvalJudgeDetail(
         Long id,
         Long evalResultId,

@@ -23,6 +23,12 @@ import io.github.trustrag.core.util.KnowledgeHashes;
 import java.time.Clock;
 import java.util.List;
 
+/**
+ * 人工终审服务。
+ *
+ * <p>中可信知识只有通过这里的审核并重新写入索引后，才会进入 HIGH_ENABLED。
+ * 审核回调用于通知业务系统，例如刷新缓存或同步外部知识目录。</p>
+ */
 public final class KnowledgeReviewService {
 
     private static final System.Logger LOGGER = System.getLogger(KnowledgeReviewService.class.getName());
@@ -98,6 +104,7 @@ public final class KnowledgeReviewService {
         ReviewTask task = loadPendingTask(knowledgeId);
         ScopeContext context = new ScopeContext(
                 candidate.userId(), candidate.conversationId(), candidate.projectId(), candidate.tenantId());
+        // 审核人可以修订标题和内容；最终 hash 必须基于修订后的正式内容重新计算。
         KnowledgeItem indexing = candidate
                 .beginHighApproval(
                         request.reviewerId(), request.modifiedTitle(), request.modifiedContent(), clock.instant())
@@ -140,6 +147,7 @@ public final class KnowledgeReviewService {
                     embeddingClient.modelName(),
                     embeddingClient.dimension(),
                     clock.instant());
+            // 先完成索引写入，再提交 HIGH_ENABLED 状态，避免高可信知识无索引可召回。
             indexService.upsert(enabled, vector);
         } catch (Exception exception) {
             KnowledgeItem failed = indexing.withIndexState(
@@ -229,6 +237,7 @@ public final class KnowledgeReviewService {
             try {
                 callback.onApproved(item);
             } catch (Exception exception) {
+                // 回调失败不回滚审核结果，业务系统可基于日志或外部重试自行补偿。
                 LOGGER.log(System.Logger.Level.WARNING, "Review callback failed for knowledge " + item.id(), exception);
             }
         }

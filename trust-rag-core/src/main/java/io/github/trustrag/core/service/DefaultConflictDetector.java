@@ -21,6 +21,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 默认冲突检测器。
+ *
+ * <p>它先用向量检索找相似的高/中可信知识，再交给关系判定器判断是冲突、
+ * 版本差异还是无关内容。</p>
+ */
 public final class DefaultConflictDetector implements ConflictDetector {
 
     private final KnowledgeRepository knowledgeRepository;
@@ -54,6 +60,7 @@ public final class DefaultConflictDetector implements ConflictDetector {
                 candidate.userId(), candidate.conversationId(), candidate.projectId(), candidate.tenantId());
         List<VectorHit> hits = new ArrayList<>();
         if (options.compareWithHigh()) {
+            // 高可信知识是冲突检测的最高优先级参照，候选不得覆盖人工终审结论。
             hits.addAll(search(candidateVector, scope, TrustLevel.HIGH, Set.of(KnowledgeStatus.HIGH_ENABLED)));
         }
         if (options.compareWithMedium()) {
@@ -80,6 +87,7 @@ public final class DefaultConflictDetector implements ConflictDetector {
             if (judgement.type() == ConflictType.CONFLICT) {
                 risk = Math.max(risk, judgement.confidence());
             } else if (judgement.type() == ConflictType.VERSION_DIFF) {
+                // 版本差异提示需要合并或更新，但风险低于直接事实冲突。
                 risk = Math.max(risk, judgement.confidence() * 0.35);
             }
         }

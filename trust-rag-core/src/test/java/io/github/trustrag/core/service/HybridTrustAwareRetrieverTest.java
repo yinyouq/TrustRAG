@@ -24,6 +24,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 验证 HybridTrustAwareRetriever 的关键行为、边界条件和回归场景。
+ */
 class HybridTrustAwareRetrieverTest {
 
     @Test

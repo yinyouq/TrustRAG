@@ -7,6 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
+/**
+ * DefaultPrivacyFilter 负责过滤或约束输入内容，降低不合规数据进入知识库的风险。
+ */
 public final class DefaultPrivacyFilter implements PrivacyFilter {
 
     private static final Pattern API_KEY = Pattern.compile(

@@ -45,6 +45,11 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * 评估管理 API。
+ *
+ * <p>前端评估台通过这里维护数据集、测试用例、运行记录、报告对比和治理快照。</p>
+ */
 @RestController
 @RequestMapping("/trust-rag/admin/eval")
 public final class TrustRagEvaluationController {
@@ -201,6 +206,7 @@ public final class TrustRagEvaluationController {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("evaluation CSV file must not be empty");
         }
+        // CSV 统一按 UTF-8 读取，方便评估集在不同开发环境间稳定导入。
         try (Reader reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8)) {
             return csvImportService.importCsv(
                     datasetId,

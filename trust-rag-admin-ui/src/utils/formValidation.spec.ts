@@ -1,3 +1,6 @@
+﻿/**
+ * 验证 formValidation 的前端行为和边界场景。
+ */
 import { describe, expect, it } from 'vitest'
 import { validateCaseForm, validateDatasetForm } from './formValidation'
 

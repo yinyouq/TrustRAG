@@ -30,6 +30,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * 知识治理管理 API。
+ *
+ * <p>用于人工创建候选、直接导入知识，以及处理候选知识的终审通过/驳回。</p>
+ */
 @RestController
 @RequestMapping("/trust-rag/admin/knowledge")
 public final class TrustRagKnowledgeController {
@@ -72,6 +77,7 @@ public final class TrustRagKnowledgeController {
         if (!privacy.allowed()) {
             throw new InvalidRagRequestException("Candidate contains sensitive content: " + privacy.reason());
         }
+        // 人工候选默认进入 GLOBAL_CANDIDATE，而不是直接成为 GLOBAL 高可信知识。
         ScopeType scope = request.scopeType() == null || request.scopeType().isBlank()
                 ? ScopeType.GLOBAL_CANDIDATE
                 : ScopeType.valueOf(request.scopeType().toUpperCase(Locale.ROOT));

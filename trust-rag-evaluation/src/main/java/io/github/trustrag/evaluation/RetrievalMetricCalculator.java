@@ -5,6 +5,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 检索指标计算器。
+ *
+ * <p>支持 Recall/Precision/MRR/NDCG，输入使用知识 ID 顺序，
+ * 便于直接从 RagTrace 或答案引用中计算评估结果。</p>
+ */
 public final class RetrievalMetricCalculator {
 
     public RetrievalMetricResult calculate(List<Long> retrievedKnowledgeIds, List<ExpectedKnowledge> expectedKnowledge) {
@@ -13,6 +19,7 @@ public final class RetrievalMetricCalculator {
         Map<Long, Integer> expectedGrades = new HashMap<>();
         for (ExpectedKnowledge expectedItem : expected) {
             if (expectedItem.knowledgeId() != null) {
+                // relevanceGrade 至少按 1 处理，避免 NDCG 中相关文档被当作无收益。
                 expectedGrades.put(expectedItem.knowledgeId(), Math.max(1, expectedItem.relevanceGrade()));
             }
         }
@@ -68,6 +75,7 @@ public final class RetrievalMetricCalculator {
             int grade = expectedGrades.getOrDefault(top.get(index), 0);
             dcg += gain(grade) / log2(index + 2);
         }
+        // IDCG 使用期望知识的理想排序，作为当前排序质量的归一化上限。
         List<Integer> idealGrades = expectedGrades.values().stream()
                 .sorted(Comparator.reverseOrder())
                 .limit(k)

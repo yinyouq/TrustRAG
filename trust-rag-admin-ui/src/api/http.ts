@@ -1,3 +1,6 @@
+﻿/**
+ * HTTP 客户端基础设施，统一处理鉴权、参数清理和错误归一化。
+ */
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 
 export interface HttpClientOptions {
@@ -34,6 +37,12 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 创建管理台 HTTP 客户端。
+ *
+ * 请求拦截器负责清理空查询参数和注入 Bearer Token；
+ * 响应拦截器把后端 Problem Detail 统一转换为 ApiError。
+ */
 export function createHttpClient(options: HttpClientOptions): AxiosInstance {
   const client = axios.create({
     baseURL: options.baseURL,
@@ -53,6 +62,7 @@ function prepareRequest(
   getToken: () => string | null,
 ): InternalAxiosRequestConfig {
   if (config.params && typeof config.params === 'object' && !Array.isArray(config.params)) {
+    // 清理 null/undefined，避免后端把空字符串和未传参数混在一起处理。
     config.params = Object.fromEntries(
       Object.entries(config.params as Record<string, unknown>)
         .filter(([, value]) => value !== null && value !== undefined),
@@ -76,6 +86,7 @@ export function normalizeApiError(reason: unknown): ApiError {
   const error = reason as AxiosError<ProblemDetailBody>
   const body = error.response?.data
   const status = error.response?.status ?? null
+  // 后端如果按 RFC 7807 返回 detail/title，前端优先展示服务端给出的业务原因。
   const detail = body?.detail
     ?? (error.code === 'ECONNABORTED' ? '请求超时，请稍后重试' : error.message)
   return new ApiError(

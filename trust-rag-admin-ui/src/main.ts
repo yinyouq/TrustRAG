@@ -1,3 +1,6 @@
+﻿/**
+ * 前端应用入口，挂载 Vue、路由、状态管理和 Element Plus。
+ */
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'

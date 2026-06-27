@@ -1,4 +1,5 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+// 逐题结果详情抽屉，展示答案、指标和 LLM Judge 诊断。
 import { ref, watch } from 'vue'
 import { evaluationApi } from '@/api'
 import type { EvalJudgeDetail, EvalResult } from '@/api/types'
@@ -16,6 +17,7 @@ watch([() => props.modelValue, () => props.result?.id], async ([visible]) => {
   if (!visible || !props.result) return
   loading.value = true
   try {
+    // 详情抽屉打开时再加载 Judge 诊断，避免列表页一次性拉取大文本 Prompt。
     judgeDetails.value = await evaluationApi.listJudgeDetails(props.result.id)
   } finally {
     loading.value = false

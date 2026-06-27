@@ -4,6 +4,9 @@ import io.github.trustrag.core.model.KnowledgeItem;
 
 import java.util.List;
 
+/**
+ * KnowledgeLifecycleManager 管理跨状态的领域流程，保证状态迁移和副作用一致。
+ */
 public interface KnowledgeLifecycleManager {
 
     int expireDueKnowledge();

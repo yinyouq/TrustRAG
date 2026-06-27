@@ -2,6 +2,9 @@ package io.github.trustrag.core.model;
 
 import java.util.Set;
 
+/**
+ * KeywordSearchRequest 表示一次领域请求，承载调用方传入的业务参数。
+ */
 public record KeywordSearchRequest(
         String query,
         ScopeContext scope,

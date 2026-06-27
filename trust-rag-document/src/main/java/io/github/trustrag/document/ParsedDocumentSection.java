@@ -1,5 +1,8 @@
 package io.github.trustrag.document;
 
+/**
+ * ParsedDocumentSection 是不可变领域数据对象，用于在服务之间传递结构化信息。
+ */
 public record ParsedDocumentSection(
         String sourceTitle,
         String title,

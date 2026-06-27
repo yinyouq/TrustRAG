@@ -9,6 +9,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * GitSourcePolicy 定义安全或可见性策略，集中校验调用方是否满足约束。
+ */
 public final class GitSourcePolicy {
 
     private final DocumentImportSettings settings;

@@ -20,6 +20,12 @@ import io.github.trustrag.core.spi.TransactionRunner;
 import java.time.Clock;
 import java.util.List;
 
+/**
+ * 索引补偿 Worker。
+ *
+ * <p>当 Milvus 或 OpenSearch 写入失败时，核心流程会留下 IndexSyncTask。
+ * Worker 后台重试成功后，再把关系库状态从 INDEX_FAILED 恢复到原目标状态。</p>
+ */
 public final class IndexSyncWorker {
 
     private final IndexSyncTaskRepository taskRepository;
@@ -146,6 +152,7 @@ public final class IndexSyncWorker {
         KnowledgeStatus target = task.targetStatus() == null
                 ? recoveryTarget(current)
                 : task.targetStatus();
+        // 只有同一知识没有其他未完成补偿任务时，才允许从 INDEX_FAILED 恢复业务状态。
         KnowledgeItem restored = current.withIndexState(
                 target, Long.toString(current.id()), embeddingClient.modelName(),
                 embeddingClient.dimension(), clock.instant())

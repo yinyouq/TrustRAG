@@ -35,6 +35,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * 评估模块的 JDBC 仓储实现。
+ *
+ * <p>同一个仓储聚合测试集、用例、运行、结果、Judge 明细、报告和治理快照，
+ * 便于评估 API 在一个事务边界内维护关联数据。</p>
+ */
 public class JdbcEvaluationRepository implements EvaluationRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -152,6 +158,7 @@ public class JdbcEvaluationRepository implements EvaluationRepository {
     @Transactional
     public EvalCase saveCaseWithExpectedKnowledge(
             EvalCase evalCase, List<ExpectedKnowledge> expectedKnowledge) {
+        // 用例和期望知识一起保存，保证评估运行看到的是完整可用的测试样本。
         EvalCase saved = saveCase(evalCase);
         replaceExpectedKnowledge(saved.id(), expectedKnowledge);
         return saved;
@@ -385,6 +392,7 @@ public class JdbcEvaluationRepository implements EvaluationRepository {
     @Override
     @Transactional
     public EvalReport saveReport(EvalReport report) {
+        // 报告按 run 幂等重建，重复生成时覆盖旧汇总而不是追加多份报告。
         jdbc.update("DELETE FROM eval_report WHERE eval_run_id=:runId", Map.of("runId", report.evalRunId()));
         KeyHolder keys = new GeneratedKeyHolder();
         jdbc.update("""

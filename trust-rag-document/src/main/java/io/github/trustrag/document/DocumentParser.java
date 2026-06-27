@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * DocumentParser 负责把特定格式文档解析为可导入的标准章节。
+ */
 public interface DocumentParser {
 
     boolean supports(String filename, String contentType);

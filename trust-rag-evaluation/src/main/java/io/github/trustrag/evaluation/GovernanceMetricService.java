@@ -4,6 +4,11 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * 知识治理指标服务。
+ *
+ * <p>负责生成和查询治理快照，让评估台可以观察候选批准率、复用率和污染风险趋势。</p>
+ */
 public final class GovernanceMetricService {
 
     private final EvaluationRepository repository;
@@ -20,6 +25,7 @@ public final class GovernanceMetricService {
     }
 
     public EvalGovernanceSnapshot latest(String tenantId, String projectId) {
+        // 没有历史快照时即时生成一份，保证概览页始终有可展示的基线。
         return repository.latestGovernanceSnapshot(tenantId, projectId)
                 .orElseGet(() -> capture(tenantId, projectId, LocalDate.now(clock)));
     }

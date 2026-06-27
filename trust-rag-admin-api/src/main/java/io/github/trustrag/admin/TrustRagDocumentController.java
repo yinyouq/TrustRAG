@@ -25,6 +25,11 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Locale;
 
+/**
+ * 文档导入 API。
+ *
+ * <p>上传和 Git 导入只创建异步任务，调用方通过 taskId 查询解析和入库进度。</p>
+ */
 @RestController
 @RequestMapping("/api/documents")
 public final class TrustRagDocumentController {
@@ -95,6 +100,7 @@ public final class TrustRagDocumentController {
             String conversationId,
             String projectId,
             String tenantId) {
+        // API 层只做字符串到领域枚举的转换，作用域合法性由 document/core 服务继续校验。
         return new DocumentImportOptions(
                 title,
                 sourceType,

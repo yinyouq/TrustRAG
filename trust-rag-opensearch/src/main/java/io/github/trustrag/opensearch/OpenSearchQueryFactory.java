@@ -9,6 +9,9 @@ import org.opensearch.client.opensearch._types.query_dsl.Query;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * OpenSearchQueryFactory 封装对象创建规则，避免调用方直接拼装底层结构。
+ */
 public final class OpenSearchQueryFactory {
 
     public Query create(KeywordSearchRequest request) {

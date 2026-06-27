@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * HtmlDocumentParser 负责把特定格式文档解析为可导入的标准章节。
+ */
 public final class HtmlDocumentParser implements DocumentParser {
 
     private static final Set<String> IGNORED_TAGS =

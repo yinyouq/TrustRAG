@@ -1,3 +1,6 @@
+﻿/**
+ * 验证 evaluation 的前端行为和边界场景。
+ */
 import axios from 'axios'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'

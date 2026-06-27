@@ -3,6 +3,9 @@ package io.github.trustrag.core.config;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * SourceScoreOptions 保存一组不可变运行选项，供核心策略在执行时读取。
+ */
 public record SourceScoreOptions(Map<String, Double> scores) {
 
     public SourceScoreOptions {

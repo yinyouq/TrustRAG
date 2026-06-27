@@ -27,6 +27,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 默认知识生命周期管理器。
+ *
+ * <p>负责过期、负反馈降级、索引失败重试、人工降级、回滚和合并。
+ * 它把关系库状态视为权威来源，外部索引失败时通过补偿任务恢复一致性。</p>
+ */
 public final class DefaultKnowledgeLifecycleManager implements KnowledgeLifecycleManager {
 
     private final KnowledgeRepository knowledgeRepository;
@@ -117,6 +123,7 @@ public final class DefaultKnowledgeLifecycleManager implements KnowledgeLifecycl
         if (options.indexFailedRetryLimit() == 0) {
             return 0;
         }
+        // 先为 INDEX_FAILED 知识补齐重试任务，再按任务表的重试次数和抢占语义执行。
         for (TrustLevel trustLevel : TrustLevel.values()) {
             for (KnowledgeItem item : knowledgeRepository.findByTrustAndStatuses(
                     trustLevel, Set.of(KnowledgeStatus.INDEX_FAILED), 500, 0)) {
@@ -167,6 +174,7 @@ public final class DefaultKnowledgeLifecycleManager implements KnowledgeLifecycl
         }
         stateMachine.validate(item.status(), KnowledgeStatus.INDEXING);
         Instant now = clock.instant();
+        // 降级需要重新写索引，因为可信等级和可见范围都是检索过滤条件。
         KnowledgeItem indexing = item.transition(
                         targetTrust, KnowledgeStatus.INDEXING, reason, now)
                 .withExpiresAt(expiry(targetTrust, now), now)
@@ -206,6 +214,7 @@ public final class DefaultKnowledgeLifecycleManager implements KnowledgeLifecycl
     public KnowledgeItem rollback(long knowledgeId, String operatorId, String reason) {
         KnowledgeItem item = load(knowledgeId);
         stateMachine.validate(item.status(), KnowledgeStatus.ROLLBACK);
+        // 先进入 ROLLBACK 标记态，再恢复 previousTrust/previousStatus，便于审计链路表达回滚动作。
         KnowledgeItem rollbackMarker = item.rollback(clock.instant());
         if (!knowledgeRepository.updateIfState(rollbackMarker, item.status(), item.version())) {
             throw new InvalidKnowledgeStateException(
@@ -262,6 +271,7 @@ public final class DefaultKnowledgeLifecycleManager implements KnowledgeLifecycl
             KnowledgeItem rejected = source.reject(
                     "merged into knowledge " + targetKnowledgeId, clock.instant());
             if (knowledgeRepository.updateIfState(rejected, source.status(), source.version())) {
+                // 被合并知识不再可检索，目标知识的复用次数增加，便于后续晋升评分。
                 knowledgeRepository.incrementUsageCount(targetKnowledgeId);
                 lineageRepository.save(new KnowledgeLineage(
                         null, targetKnowledgeId, source.id(), null, null,

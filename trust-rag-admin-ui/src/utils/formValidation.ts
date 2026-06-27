@@ -1,3 +1,6 @@
+﻿/**
+ * 表单校验工具，集中处理管理台输入规则。
+ */
 import type { ExpectedKnowledgePayload } from '@/api/types'
 
 export function validateDatasetForm(form: { name: string }): Record<string, string> {

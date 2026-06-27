@@ -5,6 +5,9 @@ import io.github.trustrag.core.service.PromotionTaskService;
 import io.github.trustrag.core.spi.KnowledgeLifecycleManager;
 import org.springframework.scheduling.annotation.Scheduled;
 
+/**
+ * TrustRagPromotionScheduler 是定时调度入口，按配置周期触发后台 Worker 或治理服务。
+ */
 public final class TrustRagPromotionScheduler {
 
     private final PromotionTaskService taskService;

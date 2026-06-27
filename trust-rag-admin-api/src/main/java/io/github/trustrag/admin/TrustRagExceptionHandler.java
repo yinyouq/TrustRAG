@@ -12,6 +12,9 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/**
+ * TrustRagExceptionHandler 承载 trust-rag-admin-api 模块中的领域逻辑或基础设施适配职责。
+ */
 @RestControllerAdvice
 public final class TrustRagExceptionHandler {
 

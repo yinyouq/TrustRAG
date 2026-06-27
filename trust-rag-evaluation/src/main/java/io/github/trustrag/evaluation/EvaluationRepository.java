@@ -5,6 +5,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * EvaluationRepository 定义领域服务依赖的持久化接口，具体实现可由不同存储适配。
+ */
 public interface EvaluationRepository {
 
     EvalDataset saveDataset(EvalDataset dataset);

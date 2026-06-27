@@ -5,6 +5,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
+/**
+ * Hashing 提供领域内部复用的工具方法，集中处理规范化和一致性逻辑。
+ */
 public final class Hashing {
 
     private Hashing() {

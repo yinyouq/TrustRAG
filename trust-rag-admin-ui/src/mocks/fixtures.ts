@@ -1,3 +1,6 @@
+﻿/**
+ * Mock 数据夹具，提供评估台本地开发和测试使用的样例数据。
+ */
 import type {
   EvalCase,
   EvalDataset,

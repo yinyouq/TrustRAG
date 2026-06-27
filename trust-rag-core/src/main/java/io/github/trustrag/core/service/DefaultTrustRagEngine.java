@@ -30,6 +30,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * TrustRAG 问答主编排器。
+ *
+ * <p>一次请求会依次经过查询改写、作用域解析、可信检索、重排、Prompt 构建、
+ * LLM 调用、知识缺口检测和轨迹落库。这里刻意把每个步骤串在同一个方法里，
+ * 方便从 trace 还原用户请求的完整执行链路。</p>
+ */
 public final class DefaultTrustRagEngine implements TrustRagEngine {
 
     private static final System.Logger LOGGER = System.getLogger(DefaultTrustRagEngine.class.getName());
@@ -80,6 +87,7 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
         boolean evaluationMode = request.isEvaluationMode();
 
         try {
+            // 查询改写失败或返回空时回退到原始问题，避免改写能力影响主流程可用性。
             List<String> queries = enabled(request.enableQueryRewrite(), options.queryRewriteEnabled())
                     ? queryRewriteService.rewrite(request)
                     : List.of(request.question().trim());
@@ -92,6 +100,7 @@ public final class DefaultTrustRagEngine implements TrustRagEngine {
             RetrievalResult retrieval = retriever.retrieve(request, scope, queries);
             trace.retrievedChunks(retrieval.chunks());
 
+            // 重排结果只接受原检索集合中的知识，防止外部 reranker 注入未授权内容。
             List<RetrievedChunk> ranked = enabled(request.enableRerank(), options.rerankEnabled())
                     ? normalizeRerank(retrieval.chunks(), rerankClient.rerank(request.question(), retrieval.chunks()))
                     : retrieval.chunks();

@@ -15,6 +15,9 @@ import io.github.trustrag.core.spi.PromotionTaskRepository;
 import java.time.Clock;
 import java.util.List;
 
+/**
+ * KnowledgePromotionWorker 执行后台批处理任务，负责领取任务、处理结果并更新状态。
+ */
 public final class KnowledgePromotionWorker {
 
     private final PromotionTaskRepository taskRepository;

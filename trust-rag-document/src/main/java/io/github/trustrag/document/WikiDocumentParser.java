@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * WikiDocumentParser 负责把特定格式文档解析为可导入的标准章节。
+ */
 public final class WikiDocumentParser implements DocumentParser {
 
     private static final Pattern HEADING = Pattern.compile("^(={1,6})\\s*(.*?)\\s*\\1$");

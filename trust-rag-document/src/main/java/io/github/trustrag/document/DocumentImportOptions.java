@@ -3,6 +3,9 @@ package io.github.trustrag.document;
 import io.github.trustrag.core.model.ScopeType;
 import io.github.trustrag.core.model.TrustLevel;
 
+/**
+ * DocumentImportOptions 保存一组不可变运行选项，供核心策略在执行时读取。
+ */
 public record DocumentImportOptions(
         String title,
         String sourceType,

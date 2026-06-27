@@ -1,6 +1,10 @@
+﻿/**
+ * 前端路由表，定义评估工作区的页面入口。
+ */
 import { createRouter, createWebHistory } from 'vue-router'
 import EvaluationLayout from '@/layouts/EvaluationLayout.vue'
 
+// 当前管理台聚焦评估工作区，所有未知入口统一回到 /eval。
 const router = createRouter({
   history: createWebHistory(),
   routes: [

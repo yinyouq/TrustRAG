@@ -12,6 +12,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 基于 LLM 的生成质量评审服务。
+ *
+ * <p>它分别评估忠实度、答案正确性和相关性，并要求模型返回可解析 JSON，
+ * 以便评估报告可以结构化聚合。</p>
+ */
 public final class DefaultGenerationJudgeService implements GenerationJudgeService {
 
     private static final int MAX_CONTEXT_LENGTH = 6000;
@@ -54,6 +60,7 @@ public final class DefaultGenerationJudgeService implements GenerationJudgeServi
         String lastRaw = null;
         for (int attempt = 0; attempt < attempts; attempt++) {
             try {
+                // Judge 失败时重试，但最终失败也会保存明细，避免评估结果静默缺失。
                 LlmResponse response = llmClient.generate(prompt);
                 String raw = response == null ? "" : response.text();
                 lastRaw = raw;
@@ -97,6 +104,7 @@ public final class DefaultGenerationJudgeService implements GenerationJudgeServi
         int start = raw.indexOf('{');
         int end = raw.lastIndexOf('}');
         if (start >= 0 && end > start) {
+            // 兼容模型在 JSON 前后添加少量说明文字的情况。
             return raw.substring(start, end + 1);
         }
         return raw;
@@ -108,6 +116,7 @@ public final class DefaultGenerationJudgeService implements GenerationJudgeServi
             case ANSWER_CORRECTNESS -> "Evaluate whether the generated answer matches the expected answer.";
             case ANSWER_RELEVANCE -> "Evaluate whether the generated answer directly answers the question.";
         };
+        // 上下文和答案都做长度截断，避免 Judge 请求被超长样本拖垮。
         return """
                 You are a strict TrustRAG evaluation judge.
                 %s

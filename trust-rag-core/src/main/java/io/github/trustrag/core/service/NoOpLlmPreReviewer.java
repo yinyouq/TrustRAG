@@ -6,6 +6,9 @@ import io.github.trustrag.core.spi.LlmPreReviewer;
 
 import java.util.List;
 
+/**
+ * NoOpLlmPreReviewer 承载 trust-rag-core 模块中的领域逻辑或基础设施适配职责。
+ */
 public final class NoOpLlmPreReviewer implements LlmPreReviewer {
 
     @Override

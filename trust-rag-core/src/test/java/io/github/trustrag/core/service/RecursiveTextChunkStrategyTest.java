@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 验证 RecursiveTextChunkStrategy 的关键行为、边界条件和回归场景。
+ */
 class RecursiveTextChunkStrategyTest {
 
     @Test

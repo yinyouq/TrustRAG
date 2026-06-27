@@ -1,3 +1,6 @@
+﻿/**
+ * 验证 http 的前端行为和边界场景。
+ */
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { ApiError, createHttpClient } from './http'

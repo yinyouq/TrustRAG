@@ -3,6 +3,9 @@ package io.github.trustrag.core.util;
 import io.github.trustrag.core.model.ScopeContext;
 import io.github.trustrag.core.model.ScopeType;
 
+/**
+ * KnowledgeHashes 提供领域内部复用的工具方法，集中处理规范化和一致性逻辑。
+ */
 public final class KnowledgeHashes {
 
     private KnowledgeHashes() {

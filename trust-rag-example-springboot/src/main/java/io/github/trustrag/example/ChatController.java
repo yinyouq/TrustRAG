@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 示例问答入口，用最小请求体演示 TrustRagEngine 的调用方式。
+ */
 @RestController
 @RequestMapping("/api/chat")
 public final class ChatController {

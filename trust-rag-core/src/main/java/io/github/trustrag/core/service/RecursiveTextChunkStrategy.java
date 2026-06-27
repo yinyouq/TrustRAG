@@ -5,6 +5,9 @@ import io.github.trustrag.core.spi.ChunkStrategy;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * RecursiveTextChunkStrategy 承载 trust-rag-core 模块中的领域逻辑或基础设施适配职责。
+ */
 public final class RecursiveTextChunkStrategy implements ChunkStrategy {
 
     private final int chunkSize;

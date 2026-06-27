@@ -1,3 +1,6 @@
+﻿/**
+ * MSW 请求处理器，模拟评估管理 API 的主要响应。
+ */
 import { delay, http, HttpResponse } from 'msw'
 import type { EvalCase, EvalDataset, EvalRun } from '@/api/types'
 import { mockCases, mockDatasets, mockExpected, mockGovernance, mockJudgeDetails, mockReports, mockResults, mockRuns } from './fixtures'

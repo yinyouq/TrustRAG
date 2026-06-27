@@ -4,6 +4,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * RagRequest 表示一次领域请求，承载调用方传入的业务参数。
+ */
 public final class RagRequest {
 
     private final String question;

@@ -1,3 +1,6 @@
+﻿/**
+ * 验证 OverviewView 的前端行为和边界场景。
+ */
 import ElementPlus from 'element-plus'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

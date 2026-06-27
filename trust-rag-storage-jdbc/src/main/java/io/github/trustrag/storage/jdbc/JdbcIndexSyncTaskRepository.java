@@ -19,6 +19,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * JdbcIndexSyncTaskRepository 是关系型数据库仓储实现，负责对应业务数据的读写和状态更新。
+ */
 public final class JdbcIndexSyncTaskRepository implements IndexSyncTaskRepository {
 
     private final NamedParameterJdbcTemplate jdbc;

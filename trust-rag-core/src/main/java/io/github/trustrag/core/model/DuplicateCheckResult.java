@@ -1,5 +1,8 @@
 package io.github.trustrag.core.model;
 
+/**
+ * DuplicateCheckResult 封装一次领域操作的结果，便于调用方读取结构化指标。
+ */
 public record DuplicateCheckResult(
         DuplicateAction action,
         Long existingKnowledgeId,

@@ -1,4 +1,5 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+// 测试集表单抽屉，复用创建和编辑测试集的输入逻辑。
 import { reactive, watch } from 'vue'
 import type { EvalDataset, EvalDatasetPayload } from '@/api/types'
 import { validateDatasetForm } from '@/utils/formValidation'

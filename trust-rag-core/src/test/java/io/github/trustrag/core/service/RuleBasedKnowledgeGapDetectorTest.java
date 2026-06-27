@@ -17,6 +17,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 验证 RuleBasedKnowledgeGapDetector 的关键行为、边界条件和回归场景。
+ */
 class RuleBasedKnowledgeGapDetectorTest {
 
     private final RuleBasedKnowledgeGapDetector detector = new RuleBasedKnowledgeGapDetector(

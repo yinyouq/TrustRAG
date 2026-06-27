@@ -2,6 +2,13 @@ package io.github.trustrag.core.model;
 
 import java.time.Instant;
 
+/**
+ * 知识库中的单条知识。
+ *
+ * <p>它同时承载内容、作用域、可信等级、索引状态、治理指标和来源信息。
+ * 类型本身保持不可变，状态变化通过 with/transition 方法返回新实例，
+ * 便于仓储层用版本号做并发保护。</p>
+ */
 public record KnowledgeItem(
         Long id,
         String title,
@@ -139,6 +146,7 @@ public record KnowledgeItem(
     public KnowledgeItem beginHighApproval(String reviewer, String newTitle, String newContent, Instant now) {
         String effectiveTitle = newTitle == null || newTitle.isBlank() ? title : newTitle.trim();
         String effectiveContent = newContent == null || newContent.isBlank() ? content : newContent.trim();
+        // GLOBAL_CANDIDATE 只有通过人工终审后才会成为真正可全局检索的 GLOBAL 知识。
         ScopeType approvedScope = scopeType == ScopeType.GLOBAL_CANDIDATE ? ScopeType.GLOBAL : scopeType;
         return new KnowledgeItem(
                 id, effectiveTitle, claim, effectiveContent, summary, knowledgeType,
@@ -154,6 +162,7 @@ public record KnowledgeItem(
             String newTitle,
             String newClaim,
             Instant now) {
+        // 从候选池晋升时同步修正作用域，避免候选作用域泄漏到正式知识池。
         ScopeType promotedScope = scopeType == ScopeType.GLOBAL_CANDIDATE
                 ? ScopeType.GLOBAL
                 : scopeType;

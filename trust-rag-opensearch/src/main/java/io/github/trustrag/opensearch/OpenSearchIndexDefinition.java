@@ -3,6 +3,9 @@ package io.github.trustrag.opensearch;
 import org.opensearch.client.opensearch._types.mapping.DynamicMapping;
 import org.opensearch.client.opensearch.indices.CreateIndexRequest;
 
+/**
+ * OpenSearchIndexDefinition 描述外部索引或数据结构定义，供初始化和校验流程使用。
+ */
 public final class OpenSearchIndexDefinition {
 
     public CreateIndexRequest createRequest(String index) {

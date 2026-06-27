@@ -1,4 +1,5 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+// 指标卡片组件，用统一样式展示单个评估指标。
 withDefaults(defineProps<{
   label: string
   value: string

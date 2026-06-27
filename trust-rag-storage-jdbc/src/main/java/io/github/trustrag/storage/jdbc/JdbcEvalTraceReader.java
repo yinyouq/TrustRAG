@@ -6,6 +6,9 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * JdbcEvalTraceReader 负责从已保存的 RAG 轨迹中读取评估需要的检索信息。
+ */
 public final class JdbcEvalTraceReader implements EvalTraceReader {
 
     private final NamedParameterJdbcTemplate jdbc;

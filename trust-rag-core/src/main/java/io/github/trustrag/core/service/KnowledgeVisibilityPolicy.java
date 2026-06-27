@@ -5,6 +5,9 @@ import io.github.trustrag.core.model.ScopeContext;
 
 import java.util.Objects;
 
+/**
+ * KnowledgeVisibilityPolicy 定义安全或可见性策略，集中校验调用方是否满足约束。
+ */
 public final class KnowledgeVisibilityPolicy {
 
     public boolean isVisible(KnowledgeItem item, ScopeContext scope) {

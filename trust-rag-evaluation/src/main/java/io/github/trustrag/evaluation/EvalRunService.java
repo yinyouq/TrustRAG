@@ -4,6 +4,9 @@ import java.time.Clock;
 import java.util.List;
 import java.util.concurrent.Executor;
 
+/**
+ * EvalRunService 封装一组业务用例，向上层提供清晰的领域操作入口。
+ */
 public final class EvalRunService {
 
     private final EvaluationRepository repository;

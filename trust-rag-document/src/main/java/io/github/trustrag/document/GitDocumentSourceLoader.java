@@ -11,6 +11,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+/**
+ * Git 文档来源加载器。
+ *
+ * <p>加载器会浅克隆仓库、按扩展名和大小限制筛选文件，并在任务结束后清理临时工作树。</p>
+ */
 public final class GitDocumentSourceLoader implements DocumentSourceLoader {
 
     private final DocumentImportSettings settings;
@@ -39,6 +44,7 @@ public final class GitDocumentSourceLoader implements DocumentSourceLoader {
         deleteTree(cloneDirectory);
         Files.createDirectories(cloneDirectory.getParent());
         try {
+            // 只做 depth=1 的浅克隆，文档导入不需要完整 Git 历史。
             var command = Git.cloneRepository()
                     .setURI(sourcePolicy.cloneUri(task.sourceUri()))
                     .setDirectory(cloneDirectory.toFile())
@@ -72,6 +78,7 @@ public final class GitDocumentSourceLoader implements DocumentSourceLoader {
                     continue;
                 }
                 if (Files.size(path) > settings.maxGitFileBytes()) {
+                    // 单文件过大直接跳过，避免一次导入任务耗尽解析资源。
                     continue;
                 }
                 if (resources.size() >= settings.maxGitFiles()) {

@@ -30,6 +30,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * 验证 DefaultKnowledgeLifecycleManager 的关键行为、边界条件和回归场景。
+ */
 class DefaultKnowledgeLifecycleManagerTest {
 
     private static final Instant NOW = Instant.parse("2026-06-12T00:00:00Z");

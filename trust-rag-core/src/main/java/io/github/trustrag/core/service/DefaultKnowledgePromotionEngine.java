@@ -43,6 +43,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+/**
+ * 默认知识晋升引擎。
+ *
+ * <p>低可信知识会经过去重、隐私、冲突、LLM 预审、证据、反馈和时效性评分。
+ * 引擎只给出自动治理结论；晋升到中可信后仍会进入人工终审，避免模型输出直接污染高可信池。</p>
+ */
 public final class DefaultKnowledgePromotionEngine implements KnowledgePromotionEngine {
 
     private final KnowledgeRepository knowledgeRepository;
@@ -187,6 +193,7 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
         double staleRisk = staleRisk(running, clock.instant());
         double feedbackScore = feedbackScore(running);
         double usageScore = Math.min(1.0, running.governance().usageCount() / 5.0);
+        // 晋升分数把正向证据和负向风险放在同一量纲，阈值由 PromotionOptions 控制。
         double promotionScore = clamp(
                 0.25 * preReview.qualityScore()
                         + 0.25 * evidence.sourceScore()
@@ -278,6 +285,7 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
     public void promoteToMedium(long knowledgeId, PromotionResult result) {
         KnowledgeItem running = requireRunning(knowledgeId);
         KnowledgeGovernance governance = applyResult(running.governance(), result, "HUMAN_REVIEW_PENDING");
+        // 中可信知识先完成索引写入，再创建人工审核任务，避免审核通过后无索引可用。
         KnowledgeItem medium = running
                 .promoteToMedium(governance, null, governance.normalizedClaim(), clock.instant())
                 .withExpiresAt(
@@ -417,6 +425,7 @@ public final class DefaultKnowledgePromotionEngine implements KnowledgePromotion
             KnowledgeItem running,
             KnowledgeItem target,
             String action) {
+        // 记录原本要恢复到的目标状态，索引补偿 Worker 成功后可继续完成这次状态迁移。
         KnowledgeItem failed = target.withIndexState(
                         KnowledgeStatus.INDEX_FAILED,
                         target.embeddingId(),

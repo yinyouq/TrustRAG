@@ -1,4 +1,5 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+// 评估概览页，展示最近运行、综合质量和关键指标。
 import { computed, onMounted, ref } from 'vue'
 import { ArrowRight, DataAnalysis } from '@element-plus/icons-vue'
 import { evaluationApi } from '@/api'

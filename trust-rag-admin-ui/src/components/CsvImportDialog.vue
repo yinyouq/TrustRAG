@@ -1,4 +1,5 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+// CSV 导入弹窗，负责上传评估用例并展示导入结果。
 import { ref, watch } from 'vue'
 import type { EvalCaseCsvImportResult } from '@/api/types'
 

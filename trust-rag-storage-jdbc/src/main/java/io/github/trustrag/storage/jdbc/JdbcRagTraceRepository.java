@@ -17,6 +17,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * JdbcRagTraceRepository 是关系型数据库仓储实现，负责对应业务数据的读写和状态更新。
+ */
 public class JdbcRagTraceRepository implements RagTraceRepository {
 
     private final NamedParameterJdbcTemplate jdbc;

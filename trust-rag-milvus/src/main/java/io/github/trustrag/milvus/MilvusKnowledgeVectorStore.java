@@ -27,6 +27,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * Milvus 向量库适配器。
+ *
+ * <p>除向量外，索引中还保存可信等级、状态和作用域字段，
+ * 让 Milvus 在服务端完成第一层权限过滤，关系库再做最终校验。</p>
+ */
 public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MilvusKnowledgeVectorStore.class);
@@ -61,6 +67,7 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
             if (!settings.autoCreateCollection()) {
                 throw new IllegalStateException("Milvus collection does not exist: " + settings.collection());
             }
+            // 自动建表只在开发或受控部署中启用，生产环境通常应提前治理 collection schema。
             createCollection();
         } else {
             validateCollection();
@@ -122,6 +129,7 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
                             + " but got " + request.vector().size());
         }
         MilvusFilter filter = filterBuilder.build(request);
+        // filterBuilder 会把状态、可信等级和作用域收敛为 Milvus 表达式，减少越权召回。
         SearchResp response = client.search(SearchReq.builder()
                 .databaseName(settings.database())
                 .collectionName(settings.collection())

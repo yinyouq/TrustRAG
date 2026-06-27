@@ -19,6 +19,12 @@ import io.github.trustrag.core.spi.TransactionRunner;
 import java.util.Optional;
 import java.util.List;
 
+/**
+ * 默认反馈回流服务。
+ *
+ * <p>普通反馈只更新计数；纠错反馈会经过隐私过滤和作用域分类，
+ * 以低可信候选知识进入后续晋升流程。</p>
+ */
 public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackService {
 
     private final FeedbackRepository feedbackRepository;
@@ -73,6 +79,7 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
                 request.userId(), request.conversationId(), request.projectId(), request.tenantId());
         ScopeType scope = scopeClassifier.classify(correctionPrivacy.sanitizedContent(), context);
         if (!correctionPrivacy.allowed() || !feedbackPrivacy.allowed()) {
+            // 含敏感信息的纠错只能落到最窄可用作用域，禁止扩散到项目或全局范围。
             scope = narrowestPrivateScope(context);
         }
         CandidateKnowledge candidate = candidateExtractor.extractCorrection(
@@ -90,6 +97,7 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
     private void updateFeedbackCounters(RagFeedbackRequest request) {
         List<Long> knowledgeIds = traceRepository.findUsedKnowledgeIds(request.traceId());
         boolean positive = request.feedbackType() == FeedbackType.LIKE;
+        // 负反馈会参与生命周期降级，纠错也视为原答案/上下文存在问题。
         boolean negative = switch (request.feedbackType()) {
             case DISLIKE, CORRECTION, IRRELEVANT_CONTEXT, WRONG_ANSWER, MISSING_KNOWLEDGE -> true;
             case LIKE -> false;

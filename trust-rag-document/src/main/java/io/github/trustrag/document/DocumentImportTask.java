@@ -3,6 +3,9 @@ package io.github.trustrag.document;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * DocumentImportTask 表示后台任务记录，跟踪任务状态、重试和错误信息。
+ */
 public record DocumentImportTask(
         Long id,
         String taskId,

@@ -7,6 +7,9 @@ import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 
+/**
+ * Spring AI ChatModel 到 TrustRAG LlmClient 的适配器。
+ */
 public final class SpringAiLlmClient implements LlmClient {
 
     private final ChatModel chatModel;

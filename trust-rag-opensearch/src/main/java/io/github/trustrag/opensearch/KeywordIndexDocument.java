@@ -5,6 +5,9 @@ import io.github.trustrag.core.model.KnowledgeItem;
 
 import java.util.List;
 
+/**
+ * KeywordIndexDocument 是不可变领域数据对象，用于在服务之间传递结构化信息。
+ */
 public record KeywordIndexDocument(
         @JsonProperty("knowledge_id") long knowledgeId,
         String title,

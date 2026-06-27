@@ -7,6 +7,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * TrustRAG Starter 的配置属性映射，集中承接 trust-rag.* 配置项。
+ */
 @ConfigurationProperties("trust-rag")
 public class TrustRagProperties {
 

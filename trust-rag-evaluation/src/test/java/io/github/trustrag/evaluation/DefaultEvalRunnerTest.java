@@ -13,6 +13,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+/**
+ * 验证 DefaultEvalRunner 的关键行为、边界条件和回归场景。
+ */
 class DefaultEvalRunnerTest {
 
     @Test

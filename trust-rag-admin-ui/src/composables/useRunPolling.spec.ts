@@ -1,3 +1,6 @@
+﻿/**
+ * 验证 useRunPolling 的前端行为和边界场景。
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRunPoller } from './useRunPolling'
 

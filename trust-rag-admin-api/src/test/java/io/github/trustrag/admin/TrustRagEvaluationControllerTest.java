@@ -35,6 +35,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 验证 TrustRagEvaluationController 的关键行为、边界条件和回归场景。
+ */
 class TrustRagEvaluationControllerTest {
 
     private EvalDatasetService datasetService;

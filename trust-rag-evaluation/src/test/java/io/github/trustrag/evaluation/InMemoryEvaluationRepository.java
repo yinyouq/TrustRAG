@@ -9,6 +9,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * 评估单元测试使用的内存仓储，覆盖 EvaluationRepository 的主要读写路径。
+ */
 class InMemoryEvaluationRepository implements EvaluationRepository {
 
     private final AtomicLong ids = new AtomicLong(1);

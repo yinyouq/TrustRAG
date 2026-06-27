@@ -10,6 +10,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * MilvusFilterBuilder 负责按领域规则构建请求、查询或输出内容。
+ */
 public final class MilvusFilterBuilder {
 
     public MilvusFilter build(VectorSearchRequest request) {

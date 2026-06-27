@@ -10,6 +10,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Reciprocal Rank Fusion 融合实现。
+ *
+ * <p>RRF 只依赖各检索分支的排序名次，不要求向量分数和 BM25 分数处在同一量纲，
+ * 因此适合作为 TrustRAG 的混合检索默认融合策略。</p>
+ */
 public final class DefaultRrfFusionService implements RrfFusionService {
 
     @Override
@@ -55,6 +61,7 @@ public final class DefaultRrfFusionService implements RrfFusionService {
         private HybridCandidate toCandidate(int rrfK) {
             double score = 0.0;
             if (vectorRank != null) {
+                // 排名越靠前贡献越大，rrfK 用来平滑不同检索分支的头部差异。
                 score += 1.0 / (rrfK + vectorRank);
             }
             if (keywordRank != null) {

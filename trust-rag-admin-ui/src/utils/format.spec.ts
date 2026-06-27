@@ -1,3 +1,6 @@
+﻿/**
+ * 验证 format 的前端行为和边界场景。
+ */
 import { describe, expect, it } from 'vitest'
 import { formatDuration, formatPercent, formatSignedPercent } from './format'
 

@@ -1,5 +1,8 @@
 package io.github.trustrag.milvus;
 
+/**
+ * MilvusSettings 保存模块运行配置，避免基础设施参数散落在业务代码中。
+ */
 public record MilvusSettings(
         String database,
         String collection,

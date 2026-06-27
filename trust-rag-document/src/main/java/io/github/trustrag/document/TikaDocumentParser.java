@@ -12,6 +12,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * TikaDocumentParser 负责把特定格式文档解析为可导入的标准章节。
+ */
 public final class TikaDocumentParser implements DocumentParser {
 
     private static final int MAX_EXTRACTED_CHARACTERS = 2_000_000;

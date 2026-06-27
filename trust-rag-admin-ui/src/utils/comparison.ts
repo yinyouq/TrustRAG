@@ -1,5 +1,11 @@
+﻿/**
+ * Before/After 对比校验工具，提前阻止不合法的对比请求。
+ */
 import type { EvalRun } from '@/api/types'
 
+/**
+ * 校验 Before/After 对比的业务前提，避免请求后端后才发现无法比较。
+ */
 export function validateRunComparison(
   before: EvalRun | null,
   after: EvalRun | null,

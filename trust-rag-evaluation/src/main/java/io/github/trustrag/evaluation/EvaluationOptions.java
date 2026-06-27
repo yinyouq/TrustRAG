@@ -2,6 +2,9 @@ package io.github.trustrag.evaluation;
 
 import java.util.List;
 
+/**
+ * EvaluationOptions 保存一组不可变运行选项，供核心策略在执行时读取。
+ */
 public record EvaluationOptions(
         boolean enabled,
         Runner runner,

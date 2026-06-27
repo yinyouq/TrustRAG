@@ -15,6 +15,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * 核心服务测试使用的内存知识仓储，避免测试依赖真实数据库。
+ */
 final class TestKnowledgeRepository implements KnowledgeRepository {
 
     private final Map<Long, KnowledgeItem> items = new LinkedHashMap<>();

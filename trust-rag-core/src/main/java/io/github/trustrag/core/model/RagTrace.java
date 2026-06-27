@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * RagTrace 承载 trust-rag-core 模块中的领域逻辑或基础设施适配职责。
+ */
 public final class RagTrace {
 
     private final String traceId;

@@ -2,6 +2,9 @@ package io.github.trustrag.core.config;
 
 import io.github.trustrag.core.model.RetrievalMode;
 
+/**
+ * HybridRetrievalOptions 保存一组不可变运行选项，供核心策略在执行时读取。
+ */
 public record HybridRetrievalOptions(
         RetrievalMode mode,
         int fusionTopN,

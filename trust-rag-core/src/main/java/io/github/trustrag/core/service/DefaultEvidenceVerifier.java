@@ -5,6 +5,9 @@ import io.github.trustrag.core.model.EvidenceVerificationResult;
 import io.github.trustrag.core.model.KnowledgeItem;
 import io.github.trustrag.core.spi.EvidenceVerifier;
 
+/**
+ * DefaultEvidenceVerifier 承载 trust-rag-core 模块中的领域逻辑或基础设施适配职责。
+ */
 public final class DefaultEvidenceVerifier implements EvidenceVerifier {
 
     private final SourceScoreOptions sourceScores;

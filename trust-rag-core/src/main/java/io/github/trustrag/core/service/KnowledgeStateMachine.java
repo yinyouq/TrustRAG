@@ -8,6 +8,11 @@ import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * 知识状态机，集中约束三池治理中的合法状态迁移。
+ *
+ * <p>所有晋升、回滚、终审和索引恢复流程都应先经过这里校验，防止绕过治理规则直接改状态。</p>
+ */
 public final class KnowledgeStateMachine {
 
     private static final Map<KnowledgeStatus, Set<KnowledgeStatus>> TRANSITIONS = transitions();

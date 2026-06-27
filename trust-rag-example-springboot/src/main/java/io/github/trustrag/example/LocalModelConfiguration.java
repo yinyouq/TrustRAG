@@ -24,6 +24,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * LocalModelConfiguration 承载 trust-rag-example-springboot 模块中的领域逻辑或基础设施适配职责。
+ */
 @Configuration(proxyBeanMethods = false)
 @Profile({"demo", "milvus"})
 public class LocalModelConfiguration {

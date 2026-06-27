@@ -21,6 +21,12 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
+/**
+ * 候选知识沉淀服务。
+ *
+ * <p>用户纠错或知识缺口生成的内容先进入 LOW_PENDING，并创建晋升任务。
+ * 后续自动治理通过后，才可能进入中可信和人工终审链路。</p>
+ */
 public final class CandidateKnowledgeService {
 
     private final KnowledgeRepository knowledgeRepository;
@@ -62,6 +68,7 @@ public final class CandidateKnowledgeService {
         String hash = KnowledgeHashes.scopedHash(candidate.content(), candidate.scopeType(), context);
         Optional<KnowledgeItem> existing = knowledgeRepository.findByHash(hash);
         if (existing.isPresent()) {
+            // 同作用域重复候选不再新建记录，只增加复用次数，避免低可信池膨胀。
             return reuseAndIncrement(existing.get());
         }
 
@@ -79,6 +86,7 @@ public final class CandidateKnowledgeService {
         try {
             return transactionRunner.required(() -> {
                 KnowledgeItem saved = knowledgeRepository.save(item);
+                // 候选创建后立即排入 LOW_TO_MEDIUM 晋升队列，由晋升引擎统一做治理检查。
                 promotionTaskRepository.save(PromotionTask.pending(
                         saved.id(), PromotionTaskType.LOW_TO_MEDIUM, now));
                 lineageRepository.save(new KnowledgeLineage(

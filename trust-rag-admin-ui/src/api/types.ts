@@ -1,3 +1,8 @@
+/**
+ * 后端评估管理 API 的前端类型镜像。
+ *
+ * 这些类型尽量保持与 Java record 字段同名，避免接口联调时做额外映射。
+ */
 export type EvalRunStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED'
 export type EvalRunType = 'MANUAL' | 'SCHEDULED' | 'BEFORE_AFTER' | 'REGRESSION'
 export type BeforeAfterGroup = 'NORMAL' | 'BEFORE' | 'AFTER'
@@ -99,6 +104,9 @@ export interface EvalRunPayload {
   async?: boolean
 }
 
+/**
+ * 单条评估结果，既包含检索质量指标，也包含可选的生成质量 Judge 指标。
+ */
 export interface EvalResult {
   id: number
   evalRunId: number
@@ -180,6 +188,9 @@ export interface EvalCompareReport {
   createdAt: string
 }
 
+/**
+ * 治理快照用于观察候选知识批准率、污染率、隐私泄露率等长期趋势。
+ */
 export interface EvalGovernanceSnapshot {
   id: number
   tenantId: string | null

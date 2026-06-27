@@ -18,6 +18,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * DefaultDuplicateDetector 负责检测特定风险或信号，并把判断结果交给治理流程使用。
+ */
 public final class DefaultDuplicateDetector implements DuplicateDetector {
 
     private static final Set<KnowledgeStatus> HIGH_STATUSES = Set.of(KnowledgeStatus.HIGH_ENABLED);

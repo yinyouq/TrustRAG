@@ -9,6 +9,9 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
+/**
+ * TrustRagExampleApplication 承载 trust-rag-example-springboot 模块中的领域逻辑或基础设施适配职责。
+ */
 @SpringBootApplication
 public class TrustRagExampleApplication {
 

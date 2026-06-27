@@ -23,6 +23,11 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * OpenSearch 关键词索引适配器。
+ *
+ * <p>它提供 BM25 召回能力，并与 Milvus 向量召回一起进入核心层的 RRF 融合。</p>
+ */
 public final class OpenSearchKnowledgeKeywordStore
         implements KnowledgeKeywordStore, AutoCloseable {
 
@@ -138,6 +143,7 @@ public final class OpenSearchKnowledgeKeywordStore
     public List<KeywordHit> search(KeywordSearchRequest request) {
         ensureInitialized();
         try {
+            // 查询构造器负责注入状态、可信等级和作用域条件，避免只按文本相似度召回。
             SearchResponse<KeywordIndexDocument> response = client.search(
                     search -> search
                             .index(settings.index())

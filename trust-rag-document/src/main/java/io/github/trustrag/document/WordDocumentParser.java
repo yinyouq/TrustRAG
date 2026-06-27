@@ -17,6 +17,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * WordDocumentParser 负责把特定格式文档解析为可导入的标准章节。
+ */
 public final class WordDocumentParser implements DocumentParser {
 
     @Override

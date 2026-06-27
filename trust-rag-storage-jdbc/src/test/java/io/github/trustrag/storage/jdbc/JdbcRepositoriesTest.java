@@ -48,6 +48,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * 验证 JdbcRepositories 的关键行为、边界条件和回归场景。
+ */
 class JdbcRepositoriesTest {
 
     private EmbeddedDatabase database;

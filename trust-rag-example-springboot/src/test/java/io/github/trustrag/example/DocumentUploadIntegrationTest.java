@@ -25,6 +25,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "trust-rag.document.keep-source-files=false",
         "trust-rag.document.initial-delay-ms=600000"
 })
+/**
+ * 验证 DocumentUploadIntegration 的端到端集成流程，确保多个模块协作符合预期。
+ */
 @AutoConfigureMockMvc
 class DocumentUploadIntegrationTest {
 

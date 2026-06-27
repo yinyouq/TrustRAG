@@ -4,6 +4,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * 组合文档解析器。
+ *
+ * <p>按注册顺序选择第一个支持当前文件的解析器，方便后续插入更专业的解析实现。</p>
+ */
 public final class CompositeDocumentParser implements DocumentParser {
 
     private final List<DocumentParser> parsers;

@@ -6,6 +6,9 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * DocumentImportSettings 保存模块运行配置，避免基础设施参数散落在业务代码中。
+ */
 public record DocumentImportSettings(
         Path storageRoot,
         long maxUploadBytes,

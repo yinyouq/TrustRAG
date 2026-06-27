@@ -3,6 +3,9 @@ package io.github.trustrag.core.model;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * VectorSearchRequest 表示一次领域请求，承载调用方传入的业务参数。
+ */
 public record VectorSearchRequest(
         List<Float> vector,
         ScopeContext scope,

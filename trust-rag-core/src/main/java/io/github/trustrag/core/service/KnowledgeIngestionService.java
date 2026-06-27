@@ -30,6 +30,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 知识导入服务，负责把外部内容切块、去重、入库并写入检索索引。
+ *
+ * <p>它是文档导入、人工录入和纠错回流进入知识池的统一入口。</p>
+ */
 public final class KnowledgeIngestionService {
 
     private final ChunkStrategy chunkStrategy;
@@ -99,6 +104,7 @@ public final class KnowledgeIngestionService {
 
         for (int index = 0; index < chunks.size(); index++) {
             String content = chunks.get(index);
+            // scopedHash 把内容和作用域一起纳入去重，避免不同租户/项目的同文档互相覆盖。
             String hash = KnowledgeHashes.scopedHash(content, scopeType, context);
             if (knowledgeRepository.findByHash(hash).isPresent()) {
                 duplicates++;
@@ -150,6 +156,7 @@ public final class KnowledgeIngestionService {
             if (vector == null || vector.size() != embeddingClient.dimension()) {
                 throw new TrustRagException("Embedding dimension mismatch while indexing knowledge " + item.id());
             }
+            // 先写外部索引，再推进关系库状态，保证可检索状态只出现在索引写入成功之后。
             enabled = item.withIndexState(
                     enabledStatus(item.trustLevel()),
                     Long.toString(item.id()),

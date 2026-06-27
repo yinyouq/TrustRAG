@@ -12,6 +12,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * 评估用例 CSV 导入服务。
+ *
+ * <p>逐行导入并收集行级错误，单行失败不会阻断其他测试用例入库。</p>
+ */
 public final class EvalCaseCsvImportService {
 
     private static final Set<String> DIFFICULTIES = Set.of("EASY", "MEDIUM", "HARD");
@@ -92,6 +97,7 @@ public final class EvalCaseCsvImportService {
             return List.of();
         }
         List<ExpectedKnowledge> result = new ArrayList<>();
+        // expected_knowledge_ids 使用 | 分隔，便于在普通表格工具里维护多条标准知识。
         for (String token : value.split("\\|")) {
             String normalized = token.trim();
             if (normalized.isEmpty()) {
@@ -162,6 +168,7 @@ public final class EvalCaseCsvImportService {
         PushbackReader pushback = new PushbackReader(reader, 1);
         int first = pushback.read();
         if (first != -1 && first != '\uFEFF') {
+            // Excel 导出的 UTF-8 CSV 可能带 BOM，导入时统一剥离。
             pushback.unread(first);
         }
         return pushback;
