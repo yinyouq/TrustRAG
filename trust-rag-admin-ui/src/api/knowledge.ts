@@ -15,6 +15,9 @@ export type KnowledgeStatus =
   | 'HUMAN_REVIEW_PENDING'
   | 'HIGH_ENABLED'
   | 'REJECTED'
+  | 'CONFLICT'
+  | 'EXPIRED'
+  | 'MERGE_PENDING'
   | 'INDEXING'
   | 'INDEX_FAILED'
   | 'ROLLBACK'
@@ -150,11 +153,29 @@ export interface ReviewCandidateFilters {
   offset?: number
 }
 
+export interface KnowledgeFilters {
+  trustLevel?: TrustLevel | null
+  status?: KnowledgeStatus | null
+  limit?: number
+  offset?: number
+}
+
 export interface ReviewPayload {
   reviewerId: string
   comment?: string | null
   modifiedTitle?: string | null
   modifiedContent?: string | null
+}
+
+export interface LifecyclePayload {
+  operatorId: string
+  reason: string
+}
+
+export interface MergeKnowledgePayload {
+  operatorId: string
+  targetKnowledgeId: number
+  sourceKnowledgeIds: number[]
 }
 
 export function createKnowledgeApi(client: AxiosInstance) {
@@ -212,6 +233,21 @@ export function createKnowledgeApi(client: AxiosInstance) {
         },
       })).data
     },
+    async listKnowledge(filters: KnowledgeFilters = {}) {
+      return (await client.get<KnowledgeItem[]>('/trust-rag/admin/knowledge', {
+        params: {
+          trustLevel: filters.trustLevel,
+          status: filters.status,
+          limit: filters.limit ?? 50,
+          offset: filters.offset ?? 0,
+        },
+      })).data
+    },
+    async getKnowledge(id: number) {
+      return (await client.get<KnowledgeItem>(
+        `/trust-rag/admin/knowledge/${id}`,
+      )).data
+    },
     async approveHigh(id: number, payload: ReviewPayload) {
       return (await client.post<KnowledgeItem>(
         `/trust-rag/admin/knowledge/${id}/approve-high`,
@@ -222,6 +258,30 @@ export function createKnowledgeApi(client: AxiosInstance) {
       return (await client.post<KnowledgeItem>(
         `/trust-rag/admin/knowledge/${id}/reject`,
         payload,
+      )).data
+    },
+    async downgradeKnowledge(id: number, payload: LifecyclePayload) {
+      return (await client.post<KnowledgeItem>(
+        `/trust-rag/admin/knowledge/${id}/downgrade`,
+        payload,
+      )).data
+    },
+    async rollbackKnowledge(id: number, payload: LifecyclePayload) {
+      return (await client.post<KnowledgeItem>(
+        `/trust-rag/admin/knowledge/${id}/rollback`,
+        payload,
+      )).data
+    },
+    async mergeKnowledge(payload: MergeKnowledgePayload) {
+      return (await client.post<KnowledgeItem>(
+        '/trust-rag/admin/knowledge/merge',
+        payload,
+      )).data
+    },
+    async deleteKnowledge(id: number, payload: LifecyclePayload) {
+      return (await client.delete<KnowledgeItem>(
+        `/trust-rag/admin/knowledge/${id}`,
+        { data: payload },
       )).data
     },
   }

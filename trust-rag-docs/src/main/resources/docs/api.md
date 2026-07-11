@@ -158,6 +158,12 @@ GET /trust-rag/admin/knowledge
     &offset=0
 ```
 
+按 ID 查询单条知识：
+
+```http
+GET /trust-rag/admin/knowledge/{id}
+```
+
 ## 人工终审
 
 ```http
@@ -193,6 +199,12 @@ POST /trust-rag/admin/knowledge/{id}/downgrade
 
 ```http
 POST /trust-rag/admin/knowledge/{id}/rollback
+```
+
+删除：
+
+```http
+DELETE /trust-rag/admin/knowledge/{id}
 ```
 
 请求体：

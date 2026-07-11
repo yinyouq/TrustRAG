@@ -282,6 +282,24 @@ public final class DefaultKnowledgeLifecycleManager implements KnowledgeLifecycl
         return load(targetKnowledgeId);
     }
 
+    @Override
+    public KnowledgeItem delete(long knowledgeId, String operatorId, String reason) {
+        KnowledgeItem item = load(knowledgeId);
+        stateMachine.validate(item.status(), KnowledgeStatus.REJECTED);
+        KnowledgeItem deleted = item.reject(reason, clock.instant());
+        transactionRunner.required(() -> {
+            if (!knowledgeRepository.updateIfState(deleted, item.status(), item.version())) {
+                throw new InvalidKnowledgeStateException(
+                        "Knowledge changed during delete: " + knowledgeId);
+            }
+            lineageRepository.save(new KnowledgeLineage(
+                    null, knowledgeId, item.id(), null, null,
+                    "KNOWLEDGE_DELETED", "HUMAN", operatorId, clock.instant()));
+        });
+        deleteVector(knowledgeId);
+        return deleted;
+    }
+
     private boolean reindex(KnowledgeItem item) {
         try {
             KnowledgeStatus target = indexRetryTarget(item);

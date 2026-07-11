@@ -85,6 +85,25 @@ class DefaultKnowledgeLifecycleManagerTest {
                 .isEqualTo(PromotionTaskStatus.SUCCESS);
     }
 
+    @Test
+    void deletesKnowledgeByRejectingItAndRemovingItsVector() {
+        Fixture fixture = fixture();
+        KnowledgeItem high = fixture.repository.save(item(
+                3L, TrustLevel.HIGH, KnowledgeStatus.HIGH_ENABLED, null));
+
+        KnowledgeItem deleted = fixture.manager.delete(
+                high.id(), "admin", "wrong knowledge");
+
+        assertThat(deleted.status()).isEqualTo(KnowledgeStatus.REJECTED);
+        assertThat(deleted.rejectReason()).isEqualTo("wrong knowledge");
+        assertThat(fixture.repository.findById(high.id()).orElseThrow().status())
+                .isEqualTo(KnowledgeStatus.REJECTED);
+        assertThat(fixture.vectorStore.deleted).containsExactly(high.id());
+        assertThat(fixture.lineage.values)
+                .extracting(KnowledgeLineage::action)
+                .contains("KNOWLEDGE_DELETED");
+    }
+
     private Fixture fixture() {
         TestKnowledgeRepository repository = new TestKnowledgeRepository();
         RecordingReviewRepository reviews = new RecordingReviewRepository();

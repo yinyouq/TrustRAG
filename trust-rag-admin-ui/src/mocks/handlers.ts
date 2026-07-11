@@ -3,7 +3,7 @@
  */
 import { delay, http, HttpResponse } from 'msw'
 import type { EvalCase, EvalDataset, EvalRun } from '@/api/types'
-import type { DocumentImportTask, ReviewPayload } from '@/api/knowledge'
+import type { DocumentImportTask, KnowledgeItem, LifecyclePayload, MergeKnowledgePayload, ReviewPayload } from '@/api/knowledge'
 import { mockCases, mockDatasets, mockDocumentTasks, mockExpected, mockGovernance, mockJudgeDetails, mockKnowledgeReferences, mockReports, mockResults, mockReviewCandidates, mockRuns } from './fixtures'
 
 let nextDatasetId = 20
@@ -91,6 +91,16 @@ export const handlers = [
     return HttpResponse.json(mockReviewCandidates.filter(item =>
       item.status === status && item.trustLevel === trustLevel))
   }),
+  http.get('*/trust-rag/admin/knowledge', ({ request }) => {
+    const search = new URL(request.url).searchParams
+    const trustLevel = search.get('trustLevel')
+    const status = search.get('status')
+    return HttpResponse.json(allKnowledgeItems().filter(item =>
+      (!trustLevel || item.trustLevel === trustLevel)
+      && (!status || item.status === status)))
+  }),
+  http.get('*/trust-rag/admin/knowledge/:id', ({ params }) =>
+    responseOr404(findKnowledge(Number(params.id)))),
   http.post('*/trust-rag/admin/knowledge/:id/approve-high', async ({ params, request }) => {
     const item = mockReviewCandidates.find(candidate => candidate.id === Number(params.id))
     if (!item) return problem(404, 'Not found', 'knowledge item not found')
@@ -114,6 +124,52 @@ export const handlers = [
       updatedAt: new Date().toISOString(),
     })
     return HttpResponse.json(item)
+  }),
+  http.post('*/trust-rag/admin/knowledge/:id/downgrade', async ({ params, request }) => {
+    const target = findMutableKnowledge(Number(params.id))
+    if (!target) return problem(404, 'Not found', 'knowledge item not found')
+    await request.json() as LifecyclePayload
+    if (target.trustLevel === 'HIGH') {
+      target.trustLevel = 'MEDIUM'
+      target.status = 'MEDIUM_ENABLED'
+    } else if (target.trustLevel === 'MEDIUM') {
+      target.trustLevel = 'LOW'
+      target.status = 'LOW_ENABLED'
+    }
+    target.updatedAt = new Date().toISOString()
+    return HttpResponse.json(findKnowledge(Number(params.id)))
+  }),
+  http.post('*/trust-rag/admin/knowledge/:id/rollback', async ({ params, request }) => {
+    const target = findMutableKnowledge(Number(params.id))
+    if (!target) return problem(404, 'Not found', 'knowledge item not found')
+    await request.json() as LifecyclePayload
+    target.trustLevel = 'HIGH'
+    target.status = 'HIGH_ENABLED'
+    target.updatedAt = new Date().toISOString()
+    return HttpResponse.json(findKnowledge(Number(params.id)))
+  }),
+  http.post('*/trust-rag/admin/knowledge/merge', async ({ request }) => {
+    const body = await request.json() as MergeKnowledgePayload
+    const target = findKnowledge(body.targetKnowledgeId)
+    if (!target) return problem(404, 'Not found', 'target knowledge item not found')
+    body.sourceKnowledgeIds.forEach(id => {
+      const source = findMutableKnowledge(id)
+      if (source) {
+        source.status = 'REJECTED'
+        source.rejectReason = `merged into knowledge ${body.targetKnowledgeId}`
+        source.updatedAt = new Date().toISOString()
+      }
+    })
+    return HttpResponse.json(target)
+  }),
+  http.delete('*/trust-rag/admin/knowledge/:id', async ({ params, request }) => {
+    const target = findMutableKnowledge(Number(params.id))
+    if (!target) return problem(404, 'Not found', 'knowledge item not found')
+    const body = await request.json() as LifecyclePayload
+    target.status = 'REJECTED'
+    target.rejectReason = body.reason
+    target.updatedAt = new Date().toISOString()
+    return HttpResponse.json(findKnowledge(Number(params.id)))
   }),
   http.get('*/trust-rag/admin/eval/datasets', ({ request }) => {
     const includeDisabled = new URL(request.url).searchParams.get('includeDisabled') === 'true'
@@ -198,6 +254,63 @@ export const handlers = [
   http.get('*/trust-rag/admin/eval/governance/trend', () => HttpResponse.json(mockGovernance)),
   http.post('*/trust-rag/admin/eval/governance/snapshot', () => HttpResponse.json(mockGovernance.at(-1))),
 ]
+
+type MutableKnowledge = (KnowledgeItem | {
+  knowledgeId: number
+  title?: string | null
+  content: string
+  scopeType?: KnowledgeItem['scopeType'] | null
+  tenantId?: string | null
+  projectId?: string | null
+  userId?: string | null
+  conversationId?: string | null
+  trustLevel?: KnowledgeItem['trustLevel'] | null
+  status: KnowledgeItem['status']
+  sourceType?: string | null
+  sourceRef?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}) & { rejectReason?: string | null }
+
+function allKnowledgeItems() {
+  return [
+    ...Object.values(mockKnowledgeReferences).flat().map(toKnowledgeItem),
+    ...mockReviewCandidates,
+  ]
+}
+
+function findKnowledge(id: number) {
+  const mutable = findMutableKnowledge(id)
+  return mutable ? toKnowledgeItem(mutable) : undefined
+}
+
+function findMutableKnowledge(id: number): MutableKnowledge | undefined {
+  return mockReviewCandidates.find(item => item.id === id)
+    ?? Object.values(mockKnowledgeReferences).flat().find(item => item.knowledgeId === id)
+}
+
+function toKnowledgeItem(item: MutableKnowledge): KnowledgeItem {
+  if ('id' in item) {
+    return item
+  }
+  return {
+    id: item.knowledgeId,
+    title: item.title || `知识 ${item.knowledgeId}`,
+    content: item.content,
+    trustLevel: item.trustLevel || 'HIGH',
+    status: item.status,
+    scopeType: item.scopeType || 'GLOBAL',
+    tenantId: item.tenantId,
+    projectId: item.projectId,
+    userId: item.userId,
+    conversationId: item.conversationId,
+    sourceType: item.sourceType,
+    sourceRef: item.sourceRef,
+    rejectReason: item.rejectReason,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }
+}
 
 function responseOr404<T>(value: T | undefined) {
   return value ? HttpResponse.json(value) : problem(404, 'Not found', 'evaluation resource not found')

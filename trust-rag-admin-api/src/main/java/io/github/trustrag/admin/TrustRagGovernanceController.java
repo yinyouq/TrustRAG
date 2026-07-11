@@ -1,5 +1,6 @@
 package io.github.trustrag.admin;
 
+import io.github.trustrag.core.exception.KnowledgeNotFoundException;
 import io.github.trustrag.core.model.ConflictRecord;
 import io.github.trustrag.core.model.KnowledgeItem;
 import io.github.trustrag.core.model.KnowledgeStatus;
@@ -15,6 +16,7 @@ import io.github.trustrag.core.spi.KnowledgeRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -114,6 +116,12 @@ public final class TrustRagGovernanceController {
                 Math.max(offset, 0));
     }
 
+    @GetMapping("/knowledge/{id}")
+    public KnowledgeItem knowledge(@PathVariable long id) {
+        return knowledgeRepository.findById(id)
+                .orElseThrow(() -> new KnowledgeNotFoundException(id));
+    }
+
     @PostMapping("/knowledge/{id}/downgrade")
     public KnowledgeItem downgrade(
             @PathVariable long id,
@@ -139,6 +147,13 @@ public final class TrustRagGovernanceController {
     public KnowledgeItem merge(@Valid @RequestBody MergeToTargetRequest request) {
         return lifecycleManager.merge(
                 request.sourceKnowledgeIds(), request.targetKnowledgeId(), request.operatorId());
+    }
+
+    @DeleteMapping("/knowledge/{id}")
+    public KnowledgeItem delete(
+            @PathVariable long id,
+            @Valid @RequestBody LifecycleRequest request) {
+        return lifecycleManager.delete(id, request.operatorId(), request.reason());
     }
 
     private <T extends Enum<T>> T enumValue(Class<T> type, String value) {

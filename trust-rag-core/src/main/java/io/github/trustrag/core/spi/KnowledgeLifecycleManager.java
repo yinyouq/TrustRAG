@@ -20,4 +20,6 @@ public interface KnowledgeLifecycleManager {
     KnowledgeItem rollback(long knowledgeId, String operatorId, String reason);
 
     KnowledgeItem merge(List<Long> sourceKnowledgeIds, long targetKnowledgeId, String operatorId);
+
+    KnowledgeItem delete(long knowledgeId, String operatorId, String reason);
 }

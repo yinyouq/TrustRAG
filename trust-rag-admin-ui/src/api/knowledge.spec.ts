@@ -162,4 +162,76 @@ describe('knowledge API', () => {
     expect(approveBody).toEqual({ reviewerId: 'admin', comment: '内容已确认' })
     expect(rejectBody).toEqual({ reviewerId: 'admin', comment: '来源不足' })
   })
+
+  it('calls knowledge lifecycle governance endpoints', async () => {
+    const bodies: Record<string, unknown> = {}
+    let listUrl = ''
+    let getUrl = ''
+    server.use(
+      http.get('*/trust-rag/admin/knowledge', ({ request }) => {
+        listUrl = request.url
+        return HttpResponse.json([{
+          id: 88,
+          title: '错误知识',
+          content: '旧内容',
+          trustLevel: 'HIGH',
+          status: 'HIGH_ENABLED',
+          scopeType: 'GLOBAL',
+        }])
+      }),
+      http.get('*/trust-rag/admin/knowledge/88', ({ request }) => {
+        getUrl = request.url
+        return HttpResponse.json({
+          id: 88,
+          title: '错误知识',
+          content: '旧内容',
+          trustLevel: 'HIGH',
+          status: 'HIGH_ENABLED',
+          scopeType: 'GLOBAL',
+        })
+      }),
+      http.post('*/trust-rag/admin/knowledge/88/downgrade', async ({ request }) => {
+        bodies.downgrade = await request.json()
+        return HttpResponse.json({ id: 88, trustLevel: 'MEDIUM', status: 'MEDIUM_ENABLED' })
+      }),
+      http.post('*/trust-rag/admin/knowledge/88/rollback', async ({ request }) => {
+        bodies.rollback = await request.json()
+        return HttpResponse.json({ id: 88, trustLevel: 'HIGH', status: 'HIGH_ENABLED' })
+      }),
+      http.post('*/trust-rag/admin/knowledge/merge', async ({ request }) => {
+        bodies.merge = await request.json()
+        return HttpResponse.json({ id: 99, trustLevel: 'HIGH', status: 'HIGH_ENABLED' })
+      }),
+      http.delete('*/trust-rag/admin/knowledge/88', async ({ request }) => {
+        bodies.delete = await request.json()
+        return HttpResponse.json({ id: 88, trustLevel: 'HIGH', status: 'REJECTED' })
+      }),
+    )
+    const api = createKnowledgeApi(axios.create())
+
+    const listed = await api.listKnowledge({
+      trustLevel: 'HIGH',
+      status: 'HIGH_ENABLED',
+      limit: 10,
+      offset: 20,
+    })
+    const current = await api.getKnowledge(88)
+    await api.downgradeKnowledge(88, { operatorId: 'admin', reason: '错误' })
+    await api.rollbackKnowledge(88, { operatorId: 'admin', reason: '恢复' })
+    await api.mergeKnowledge({ operatorId: 'admin', targetKnowledgeId: 99, sourceKnowledgeIds: [88] })
+    await api.deleteKnowledge(88, { operatorId: 'admin', reason: '删除错误知识' })
+
+    const search = new URL(listUrl).searchParams
+    expect(search.get('trustLevel')).toBe('HIGH')
+    expect(search.get('status')).toBe('HIGH_ENABLED')
+    expect(search.get('limit')).toBe('10')
+    expect(search.get('offset')).toBe('20')
+    expect(getUrl).toContain('/trust-rag/admin/knowledge/88')
+    expect(listed[0].id).toBe(88)
+    expect(current.id).toBe(88)
+    expect(bodies.downgrade).toEqual({ operatorId: 'admin', reason: '错误' })
+    expect(bodies.rollback).toEqual({ operatorId: 'admin', reason: '恢复' })
+    expect(bodies.merge).toEqual({ operatorId: 'admin', targetKnowledgeId: 99, sourceKnowledgeIds: [88] })
+    expect(bodies.delete).toEqual({ operatorId: 'admin', reason: '删除错误知识' })
+  })
 })

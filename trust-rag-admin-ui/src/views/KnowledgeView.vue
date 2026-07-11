@@ -2,7 +2,7 @@
 // 知识库管理页，提供文档导入任务、手动知识导入和评估知识 ID 参考。
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check, Close, Download, Refresh, Search, UploadFilled } from '@element-plus/icons-vue'
+import { Check, Close, Delete, Download, Refresh, RefreshLeft, Search, UploadFilled } from '@element-plus/icons-vue'
 import { knowledgeApi } from '@/api'
 import type {
   DocumentImportStatus,
@@ -10,6 +10,7 @@ import type {
   KnowledgeImportResult,
   KnowledgeReferenceItem,
   KnowledgeItem,
+  KnowledgeStatus,
   ScopeType,
   TrustLevel,
 } from '@/api/knowledge'
@@ -19,6 +20,22 @@ import { formatDateTime } from '@/utils/format'
 const store = useAppStore()
 const trustOptions: TrustLevel[] = ['HIGH', 'MEDIUM', 'LOW']
 const scopeOptions: ScopeType[] = ['GLOBAL', 'TENANT', 'PROJECT', 'USER', 'CONVERSATION']
+const statusOptions: KnowledgeStatus[] = [
+  'HIGH_ENABLED',
+  'MEDIUM_ENABLED',
+  'HUMAN_REVIEW_PENDING',
+  'LOW_ENABLED',
+  'LOW_PENDING',
+  'PROMOTION_PENDING',
+  'PROMOTION_RUNNING',
+  'INDEXING',
+  'INDEX_FAILED',
+  'REJECTED',
+  'CONFLICT',
+  'EXPIRED',
+  'MERGE_PENDING',
+  'ROLLBACK',
+]
 
 const documentSaving = ref(false)
 const taskLoading = ref(false)
@@ -26,6 +43,8 @@ const importSaving = ref(false)
 const reviewLoading = ref(false)
 const libraryLoading = ref(false)
 const knowledgeLoading = ref(false)
+const governanceLoading = ref(false)
+const governanceActionLoading = ref(false)
 const reviewSavingId = ref<number | null>(null)
 const selectedFile = ref<File | null>(null)
 const taskId = ref('')
@@ -35,10 +54,13 @@ const reviewCandidates = ref<KnowledgeItem[]>([])
 const documentLibraries = ref<DocumentImportTask[]>([])
 const selectedLibrary = ref<DocumentImportTask | null>(null)
 const libraryKnowledge = ref<KnowledgeReferenceItem[]>([])
+const governanceKnowledge = ref<KnowledgeItem[]>([])
+const selectedGovernanceKnowledge = ref<KnowledgeItem | null>(null)
 const knowledgePage = ref(1)
 const knowledgePageSize = 10
 const knowledgeTotal = ref(0)
 const reviewerId = ref(localStorage.getItem('trust-rag.reviewer-id') || 'admin')
+const operatorId = ref(localStorage.getItem('trust-rag.operator-id') || reviewerId.value)
 
 const documentForm = reactive({
   title: '',
@@ -65,6 +87,17 @@ const manualForm = reactive({
   tenantId: store.tenantId,
 })
 
+const governanceFilters = reactive({
+  trustLevel: 'HIGH' as TrustLevel | '',
+  status: 'HIGH_ENABLED' as KnowledgeStatus | '',
+})
+
+const governanceForm = reactive({
+  lookupId: '',
+  targetKnowledgeId: '',
+  sourceKnowledgeIds: '',
+})
+
 const fileName = computed(() => selectedFile.value?.name || '选择 PDF、Word、Markdown、HTML 等知识文档')
 const libraryScopeItems = computed(() => {
   const task = selectedLibrary.value
@@ -82,6 +115,7 @@ const libraryScopeItems = computed(() => {
 
 onMounted(() => {
   loadDocumentLibraries()
+  loadGovernanceKnowledge()
   loadReviewCandidates()
 })
 
@@ -201,6 +235,181 @@ async function importKnowledge() {
     ElMessage.error(message(reason))
   } finally {
     importSaving.value = false
+  }
+}
+
+async function loadGovernanceKnowledge() {
+  governanceLoading.value = true
+  try {
+    governanceKnowledge.value = await knowledgeApi.listKnowledge({
+      trustLevel: governanceFilters.trustLevel || null,
+      status: governanceFilters.status || null,
+      limit: 50,
+      offset: 0,
+    })
+    if (selectedGovernanceKnowledge.value) {
+      selectedGovernanceKnowledge.value = governanceKnowledge.value.find(
+        item => item.id === selectedGovernanceKnowledge.value?.id,
+      ) ?? selectedGovernanceKnowledge.value
+    }
+  } catch (reason) {
+    ElMessage.error(message(reason))
+  } finally {
+    governanceLoading.value = false
+  }
+}
+
+async function lookupGovernanceKnowledge() {
+  const id = Number(governanceForm.lookupId)
+  if (!Number.isInteger(id) || id <= 0) {
+    ElMessage.warning('请输入有效的 knowledge_id')
+    return
+  }
+  governanceLoading.value = true
+  try {
+    const item = await knowledgeApi.getKnowledge(id)
+    selectGovernanceKnowledge(item)
+    upsertGovernanceKnowledge(item)
+  } catch (reason) {
+    ElMessage.error(message(reason))
+  } finally {
+    governanceLoading.value = false
+  }
+}
+
+function selectGovernanceKnowledge(item: KnowledgeItem) {
+  selectedGovernanceKnowledge.value = item
+  governanceForm.lookupId = String(item.id)
+}
+
+async function downgradeSelectedKnowledge() {
+  const item = selectedGovernanceKnowledge.value
+  if (!item || !ensureOperator()) return
+  const reason = await promptReason('降级知识', '发现知识有误，需要降低可信度')
+  if (!reason) return
+  await runGovernanceAction(async () => {
+    const changed = await knowledgeApi.downgradeKnowledge(item.id, lifecyclePayload(reason))
+    upsertGovernanceKnowledge(changed)
+    selectedGovernanceKnowledge.value = changed
+    ElMessage.success('知识已降级')
+  })
+}
+
+async function rollbackSelectedKnowledge() {
+  const item = selectedGovernanceKnowledge.value
+  if (!item || !ensureOperator()) return
+  const reason = await promptReason('回滚知识', '恢复到上一治理状态')
+  if (!reason) return
+  await runGovernanceAction(async () => {
+    const changed = await knowledgeApi.rollbackKnowledge(item.id, lifecyclePayload(reason))
+    upsertGovernanceKnowledge(changed)
+    selectedGovernanceKnowledge.value = changed
+    ElMessage.success('知识已回滚')
+  })
+}
+
+async function deleteSelectedKnowledge() {
+  const item = selectedGovernanceKnowledge.value
+  if (!item || !ensureOperator()) return
+  const reason = await promptReason('删除知识', '确认这条知识错误，退出检索')
+  if (!reason) return
+  await runGovernanceAction(async () => {
+    const changed = await knowledgeApi.deleteKnowledge(item.id, lifecyclePayload(reason))
+    upsertGovernanceKnowledge(changed)
+    selectedGovernanceKnowledge.value = changed
+    ElMessage.success('知识已删除并退出检索')
+  })
+}
+
+async function mergeKnowledgeItems() {
+  if (!ensureOperator()) return
+  const targetKnowledgeId = Number(governanceForm.targetKnowledgeId)
+  const sourceKnowledgeIds = parseKnowledgeIds(governanceForm.sourceKnowledgeIds)
+  if (!Number.isInteger(targetKnowledgeId) || targetKnowledgeId <= 0) {
+    ElMessage.warning('请输入有效的目标 knowledge_id')
+    return
+  }
+  if (!sourceKnowledgeIds.length) {
+    ElMessage.warning('请输入至少一个源 knowledge_id')
+    return
+  }
+  if (sourceKnowledgeIds.includes(targetKnowledgeId)) {
+    ElMessage.warning('源知识不能包含目标知识')
+    return
+  }
+  await runGovernanceAction(async () => {
+    const target = await knowledgeApi.mergeKnowledge({
+      operatorId: operatorId.value.trim(),
+      targetKnowledgeId,
+      sourceKnowledgeIds,
+    })
+    upsertGovernanceKnowledge(target)
+    selectedGovernanceKnowledge.value = target
+    ElMessage.success('知识已合并，源知识已退出检索')
+    await loadGovernanceKnowledge()
+  })
+}
+
+async function runGovernanceAction(action: () => Promise<void>) {
+  governanceActionLoading.value = true
+  try {
+    await action()
+  } catch (reason) {
+    ElMessage.error(message(reason))
+  } finally {
+    governanceActionLoading.value = false
+  }
+}
+
+async function promptReason(title: string, defaultReason: string) {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '请输入操作原因，便于后续治理追踪。',
+      title,
+      {
+        inputType: 'textarea',
+        inputValue: defaultReason,
+        inputValidator: value => Boolean(value?.trim()) || '请输入操作原因',
+        confirmButtonText: '确认',
+        cancelButtonText: '取消',
+      },
+    )
+    return value.trim()
+  } catch (reason) {
+    if (reason !== 'cancel' && reason !== 'close') ElMessage.error(message(reason))
+    return null
+  }
+}
+
+function lifecyclePayload(reason: string) {
+  return {
+    operatorId: operatorId.value.trim(),
+    reason,
+  }
+}
+
+function ensureOperator() {
+  if (!operatorId.value.trim()) {
+    ElMessage.warning('请输入操作人 ID')
+    return false
+  }
+  localStorage.setItem('trust-rag.operator-id', operatorId.value.trim())
+  return true
+}
+
+function parseKnowledgeIds(value: string) {
+  return value
+    .split(/[,\s，]+/)
+    .map(item => Number(item.trim()))
+    .filter(item => Number.isInteger(item) && item > 0)
+}
+
+function upsertGovernanceKnowledge(item: KnowledgeItem) {
+  const index = governanceKnowledge.value.findIndex(value => value.id === item.id)
+  if (index >= 0) {
+    governanceKnowledge.value[index] = item
+  } else {
+    governanceKnowledge.value.unshift(item)
   }
 }
 
@@ -567,6 +776,136 @@ function message(reason: unknown) {
         </el-descriptions-item>
       </el-descriptions>
       <div v-else class="quiet block-gap">提交文档后会自动填入任务 ID，也可以手动输入历史 taskId 查询进度。</div>
+    </div>
+
+    <div class="content-panel block-gap table-panel">
+      <div class="section-heading compact-heading">
+        <div>
+          <span class="eyebrow">GOVERNANCE</span>
+          <h2>知识治理操作</h2>
+          <p class="quiet">按 knowledge_id 查询已入库知识，并执行降级、回滚、合并或删除。</p>
+        </div>
+        <div class="review-actions">
+          <el-input v-model="operatorId" placeholder="操作人 ID" clearable />
+          <el-button :icon="Refresh" :loading="governanceLoading" @click="loadGovernanceKnowledge">刷新</el-button>
+        </div>
+      </div>
+
+      <div class="toolbar toolbar--wide block-gap">
+        <el-input v-model="governanceForm.lookupId" placeholder="knowledge_id" clearable />
+        <el-button type="primary" :icon="Search" :loading="governanceLoading" @click="lookupGovernanceKnowledge">
+          查询
+        </el-button>
+        <el-select v-model="governanceFilters.trustLevel" placeholder="信任级别" clearable>
+          <el-option v-for="item in trustOptions" :key="item" :label="item" :value="item" />
+        </el-select>
+        <el-select v-model="governanceFilters.status" placeholder="状态" clearable>
+          <el-option v-for="item in statusOptions" :key="item" :label="item" :value="item" />
+        </el-select>
+        <el-button :icon="Refresh" :loading="governanceLoading" @click="loadGovernanceKnowledge">应用筛选</el-button>
+      </div>
+
+      <el-descriptions v-if="selectedGovernanceKnowledge" class="block-gap" :column="3" border>
+        <el-descriptions-item label="knowledge_id">{{ selectedGovernanceKnowledge.id }}</el-descriptions-item>
+        <el-descriptions-item label="信任级别">{{ selectedGovernanceKnowledge.trustLevel }}</el-descriptions-item>
+        <el-descriptions-item label="状态">{{ selectedGovernanceKnowledge.status }}</el-descriptions-item>
+        <el-descriptions-item label="标题" :span="2">{{ selectedGovernanceKnowledge.title }}</el-descriptions-item>
+        <el-descriptions-item label="Scope">{{ scopeText(selectedGovernanceKnowledge) || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="来源" :span="3">
+          {{ selectedGovernanceKnowledge.sourceType || '-' }} /
+          {{ selectedGovernanceKnowledge.sourceRef || '暂无来源引用' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="内容" :span="3">
+          {{ selectedGovernanceKnowledge.content }}
+        </el-descriptions-item>
+        <el-descriptions-item v-if="selectedGovernanceKnowledge.rejectReason" label="退出原因" :span="3">
+          {{ selectedGovernanceKnowledge.rejectReason }}
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <div class="heading-actions block-gap">
+        <el-button
+          type="warning"
+          :icon="RefreshLeft"
+          :disabled="!selectedGovernanceKnowledge"
+          :loading="governanceActionLoading"
+          @click="downgradeSelectedKnowledge"
+        >
+          降级
+        </el-button>
+        <el-button
+          :icon="Refresh"
+          :disabled="!selectedGovernanceKnowledge"
+          :loading="governanceActionLoading"
+          @click="rollbackSelectedKnowledge"
+        >
+          回滚
+        </el-button>
+        <el-button
+          type="danger"
+          :icon="Delete"
+          :disabled="!selectedGovernanceKnowledge"
+          :loading="governanceActionLoading"
+          @click="deleteSelectedKnowledge"
+        >
+          删除
+        </el-button>
+      </div>
+
+      <el-form class="block-gap" label-position="top">
+        <div class="form-grid form-grid--3">
+          <el-form-item label="目标 knowledge_id">
+            <el-input v-model="governanceForm.targetKnowledgeId" placeholder="保留的正确知识 ID" clearable />
+          </el-form-item>
+          <el-form-item label="源 knowledge_id">
+            <el-input v-model="governanceForm.sourceKnowledgeIds" placeholder="多个 ID 用逗号或空格分隔" clearable />
+          </el-form-item>
+          <el-form-item label="合并">
+            <el-button
+              type="primary"
+              :icon="Check"
+              :loading="governanceActionLoading"
+              @click="mergeKnowledgeItems"
+            >
+              合并到目标知识
+            </el-button>
+          </el-form-item>
+        </div>
+      </el-form>
+
+      <el-table
+        v-loading="governanceLoading"
+        class="block-gap"
+        :data="governanceKnowledge"
+        empty-text="暂无符合条件的知识"
+        highlight-current-row
+        row-key="id"
+        @row-click="selectGovernanceKnowledge"
+      >
+        <el-table-column label="knowledge_id" width="130">
+          <template #default="{ row }">
+            <el-tag type="success">{{ row.id }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="知识" min-width="340">
+          <template #default="{ row }">
+            <strong>{{ row.title }}</strong>
+            <small class="table-note">{{ row.content }}</small>
+          </template>
+        </el-table-column>
+        <el-table-column label="Scope" min-width="160">
+          <template #default="{ row }">{{ scopeText(row) || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="170">
+          <template #default="{ row }">
+            <el-tag type="warning">{{ row.trustLevel }}</el-tag>
+            <el-tag class="collapse-tag" type="info">{{ row.status }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="更新时间" width="150">
+          <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
+        </el-table-column>
+      </el-table>
     </div>
 
     <div class="content-panel block-gap table-panel">

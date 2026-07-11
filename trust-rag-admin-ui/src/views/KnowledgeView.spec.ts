@@ -19,6 +19,12 @@ vi.mock('@/api', () => ({
     listReviewCandidates: vi.fn(),
     approveHigh: vi.fn(),
     rejectCandidate: vi.fn(),
+    listKnowledge: vi.fn(),
+    getKnowledge: vi.fn(),
+    downgradeKnowledge: vi.fn(),
+    rollbackKnowledge: vi.fn(),
+    mergeKnowledge: vi.fn(),
+    deleteKnowledge: vi.fn(),
   },
 }))
 
@@ -34,6 +40,7 @@ describe('KnowledgeView', () => {
       totalCount: 0,
     })
     api.listReviewCandidates.mockResolvedValue([])
+    api.listKnowledge.mockResolvedValue([])
   })
 
   it('renders document upload and manual import workspaces', () => {
@@ -44,6 +51,7 @@ describe('KnowledgeView', () => {
     expect(wrapper.text()).toContain('文档上传')
     expect(wrapper.text()).toContain('手动导入知识')
     expect(wrapper.text()).toContain('任务查询')
+    expect(wrapper.text()).toContain('知识治理操作')
     expect(wrapper.text()).toContain('评估知识 ID')
   })
 
