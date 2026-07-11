@@ -19,6 +19,7 @@ const router = createRouter({
         { path: 'reports', name: 'reports', component: () => import('@/views/ReportsView.vue') },
         { path: 'compare', name: 'compare', component: () => import('@/views/CompareView.vue') },
         { path: 'governance', name: 'governance', component: () => import('@/views/GovernanceView.vue') },
+        { path: 'knowledge', name: 'knowledge', component: () => import('@/views/KnowledgeView.vue') },
       ],
     },
     { path: '/', redirect: '/eval' },

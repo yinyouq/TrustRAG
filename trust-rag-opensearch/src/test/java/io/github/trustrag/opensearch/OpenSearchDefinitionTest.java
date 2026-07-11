@@ -7,6 +7,8 @@ import io.github.trustrag.core.model.TrustLevel;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -55,5 +57,30 @@ class OpenSearchDefinitionTest {
         assertThat(query.bool().filter()).hasSize(3);
         assertThat(query.bool().filter().get(2).bool().should())
                 .hasSize(4);
+    }
+
+    @Test
+    void trimsLongKeywordQueryBeforeBuildingBm25MultiMatch() {
+        String longQuery = IntStream.rangeClosed(1, 1_500)
+                .mapToObj(index -> "term" + index)
+                .collect(Collectors.joining(" "));
+
+        var query = new OpenSearchQueryFactory().create(new KeywordSearchRequest(
+                longQuery,
+                new ScopeContext("user-1", "conversation-1", null, "tenant-1"),
+                Set.of(TrustLevel.HIGH, TrustLevel.MEDIUM, TrustLevel.LOW),
+                Set.of(
+                        KnowledgeStatus.HIGH_ENABLED,
+                        KnowledgeStatus.MEDIUM_ENABLED,
+                        KnowledgeStatus.LOW_ENABLED),
+                Set.of(),
+                30,
+                false));
+
+        String sanitized = query.bool().must().get(0).multiMatch().query();
+
+        assertThat(sanitized.split("\\s+")).hasSize(OpenSearchKeywordQuerySanitizer.MAX_QUERY_TERMS);
+        assertThat(sanitized).startsWith("term1 term2");
+        assertThat(sanitized).endsWith("term128");
     }
 }

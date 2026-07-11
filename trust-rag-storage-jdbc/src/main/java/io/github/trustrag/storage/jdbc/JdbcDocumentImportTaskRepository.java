@@ -89,6 +89,19 @@ public final class JdbcDocumentImportTaskRepository implements DocumentImportTas
     }
 
     @Override
+    public List<DocumentImportTask> list(int limit, int offset) {
+        return jdbc.query("""
+                        SELECT * FROM document_import_task
+                        ORDER BY created_at DESC, id DESC
+                        LIMIT :limit OFFSET :offset
+                        """,
+                new MapSqlParameterSource()
+                        .addValue("limit", limit)
+                        .addValue("offset", offset),
+                rowMapper);
+    }
+
+    @Override
     public List<DocumentImportTask> findRunnable(int retryLimit, int limit) {
         return jdbc.query("""
                         SELECT * FROM document_import_task

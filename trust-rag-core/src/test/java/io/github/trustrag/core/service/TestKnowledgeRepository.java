@@ -77,6 +77,24 @@ final class TestKnowledgeRepository implements KnowledgeRepository {
     }
 
     @Override
+    public List<KnowledgeItem> findByDocumentId(String documentId, int limit, int offset) {
+        return items.values().stream()
+                .filter(item -> item.sourceMetadata().documentId() != null)
+                .filter(item -> item.sourceMetadata().documentId().equals(documentId))
+                .skip(offset)
+                .limit(limit)
+                .toList();
+    }
+
+    @Override
+    public long countByDocumentId(String documentId) {
+        return items.values().stream()
+                .filter(item -> item.sourceMetadata().documentId() != null)
+                .filter(item -> item.sourceMetadata().documentId().equals(documentId))
+                .count();
+    }
+
+    @Override
     public List<KnowledgeItem> findCandidates(
             KnowledgeStatus status,
             TrustLevel trustLevel,

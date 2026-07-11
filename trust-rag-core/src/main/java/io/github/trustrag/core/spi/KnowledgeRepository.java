@@ -39,6 +39,10 @@ public interface KnowledgeRepository {
 
     List<KnowledgeItem> findAllByIds(Collection<Long> ids);
 
+    List<KnowledgeItem> findByDocumentId(String documentId, int limit, int offset);
+
+    long countByDocumentId(String documentId);
+
     List<KnowledgeItem> findCandidates(
             KnowledgeStatus status,
             TrustLevel trustLevel,

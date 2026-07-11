@@ -1,7 +1,9 @@
 package io.github.trustrag.admin;
 
+import io.github.trustrag.core.model.KnowledgeItem;
 import io.github.trustrag.core.model.ScopeType;
 import io.github.trustrag.core.model.TrustLevel;
+import io.github.trustrag.core.spi.KnowledgeRepository;
 import io.github.trustrag.document.DocumentImportOptions;
 import io.github.trustrag.document.DocumentImportService;
 import io.github.trustrag.document.DocumentImportStatus;
@@ -23,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -35,9 +38,13 @@ import java.util.Locale;
 public final class TrustRagDocumentController {
 
     private final DocumentImportService service;
+    private final KnowledgeRepository knowledgeRepository;
 
-    public TrustRagDocumentController(DocumentImportService service) {
+    public TrustRagDocumentController(
+            DocumentImportService service,
+            KnowledgeRepository knowledgeRepository) {
         this.service = service;
+        this.knowledgeRepository = knowledgeRepository;
     }
 
     @PostMapping(
@@ -84,6 +91,34 @@ public final class TrustRagDocumentController {
     @GetMapping("/tasks/{taskId}")
     public DocumentTaskResponse task(@PathVariable String taskId) {
         return DocumentTaskResponse.from(service.find(taskId));
+    }
+
+    @GetMapping("/tasks")
+    public List<DocumentTaskResponse> tasks(
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        return service.list(limit, offset).stream()
+                .map(DocumentTaskResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/tasks/{taskId}/knowledge")
+    public DocumentKnowledgeResponse knowledge(
+            @PathVariable String taskId,
+            @RequestParam(defaultValue = "1000") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        DocumentImportTask task = service.find(taskId);
+        int safeLimit = Math.min(Math.max(limit, 1), 2000);
+        int safeOffset = Math.max(offset, 0);
+        List<KnowledgeReferenceItem> items = knowledgeRepository
+                .findByDocumentId(task.taskId(), safeLimit, safeOffset)
+                .stream()
+                .map(KnowledgeReferenceItem::from)
+                .toList();
+        return new DocumentKnowledgeResponse(
+                DocumentTaskResponse.from(task),
+                items,
+                knowledgeRepository.countByDocumentId(task.taskId()));
     }
 
     @PostMapping("/tasks/{taskId}/retry")
@@ -141,8 +176,16 @@ public final class TrustRagDocumentController {
             String taskId,
             DocumentSourceKind sourceKind,
             DocumentImportStatus status,
+            String title,
             String originalFilename,
             String sourceUri,
+            String sourceType,
+            TrustLevel trustLevel,
+            ScopeType scopeType,
+            String userId,
+            String conversationId,
+            String projectId,
+            String tenantId,
             int totalDocuments,
             int totalSections,
             int importedCount,
@@ -160,8 +203,16 @@ public final class TrustRagDocumentController {
                     task.taskId(),
                     task.sourceKind(),
                     task.status(),
+                    task.options().title(),
                     task.originalFilename(),
                     task.sourceUri(),
+                    task.options().sourceType(),
+                    task.options().trustLevel(),
+                    task.options().scopeType(),
+                    task.options().userId(),
+                    task.options().conversationId(),
+                    task.options().projectId(),
+                    task.options().tenantId(),
                     task.totalDocuments(),
                     task.totalSections(),
                     task.importedCount(),
@@ -173,6 +224,71 @@ public final class TrustRagDocumentController {
                     task.startedAt(),
                     task.finishedAt(),
                     task.updatedAt());
+        }
+    }
+
+    public record DocumentKnowledgeResponse(
+            DocumentTaskResponse task,
+            List<KnowledgeReferenceItem> items,
+            long totalCount) {
+    }
+
+    public record KnowledgeReferenceItem(
+            long knowledgeId,
+            String expectedKnowledgeIds,
+            String title,
+            String contentPreview,
+            String content,
+            ScopeType scopeType,
+            String tenantId,
+            String projectId,
+            String userId,
+            String conversationId,
+            TrustLevel trustLevel,
+            String status,
+            String sourceType,
+            String sourceRef,
+            String sourceTitle,
+            String sourceUrl,
+            Integer pageNumber,
+            String sectionPath,
+            String documentId,
+            Integer chunkIndex,
+            Instant createdAt,
+            Instant updatedAt) {
+
+        static KnowledgeReferenceItem from(KnowledgeItem item) {
+            return new KnowledgeReferenceItem(
+                    item.id(),
+                    Long.toString(item.id()),
+                    item.title(),
+                    preview(item.content()),
+                    item.content(),
+                    item.scopeType(),
+                    item.tenantId(),
+                    item.projectId(),
+                    item.userId(),
+                    item.conversationId(),
+                    item.trustLevel(),
+                    item.status().name(),
+                    item.sourceType(),
+                    item.sourceRef(),
+                    item.sourceMetadata().sourceTitle(),
+                    item.sourceMetadata().sourceUrl(),
+                    item.sourceMetadata().pageNumber(),
+                    item.sourceMetadata().sectionPath(),
+                    item.sourceMetadata().documentId(),
+                    item.sourceMetadata().chunkIndex(),
+                    item.createdAt(),
+                    item.updatedAt());
+        }
+
+        private static String preview(String content) {
+            if (content == null) {
+                return "";
+            }
+            String normalized = content.replaceAll("\\s+", " ").trim();
+            return normalized.length() <= 160 ? normalized : normalized.substring(0, 160) + "...";
         }
     }
 }

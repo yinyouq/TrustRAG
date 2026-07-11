@@ -3,13 +3,118 @@
  */
 import { delay, http, HttpResponse } from 'msw'
 import type { EvalCase, EvalDataset, EvalRun } from '@/api/types'
-import { mockCases, mockDatasets, mockExpected, mockGovernance, mockJudgeDetails, mockReports, mockResults, mockRuns } from './fixtures'
+import type { DocumentImportTask, ReviewPayload } from '@/api/knowledge'
+import { mockCases, mockDatasets, mockDocumentTasks, mockExpected, mockGovernance, mockJudgeDetails, mockKnowledgeReferences, mockReports, mockResults, mockReviewCandidates, mockRuns } from './fixtures'
 
 let nextDatasetId = 20
 let nextCaseId = 50
 let nextRunId = 200
+let nextDocumentTaskId = 2
 
 export const handlers = [
+  http.post('*/api/documents/upload', async ({ request }) => {
+    const body = await request.formData()
+    const file = body.get('file') as File | null
+    const now = new Date().toISOString()
+    const task: DocumentImportTask = {
+      taskId: `mock-doc-task-${nextDocumentTaskId++}`,
+      sourceKind: 'UPLOAD',
+      status: 'PROCESSING',
+      title: body.get('title')?.toString() || null,
+      originalFilename: file?.name || 'uploaded-document',
+      sourceUri: body.get('sourceUrl')?.toString() || null,
+      sourceType: body.get('sourceType')?.toString() || 'document',
+      trustLevel: body.get('trustLevel')?.toString() as DocumentImportTask['trustLevel'] || 'HIGH',
+      scopeType: body.get('scopeType')?.toString() as DocumentImportTask['scopeType'] || 'GLOBAL',
+      userId: body.get('userId')?.toString() || null,
+      conversationId: body.get('conversationId')?.toString() || null,
+      projectId: body.get('projectId')?.toString() || null,
+      tenantId: body.get('tenantId')?.toString() || null,
+      totalDocuments: 1,
+      totalSections: 0,
+      importedCount: 0,
+      duplicateCount: 0,
+      failedCount: 0,
+      retryCount: 0,
+      errorMessage: null,
+      createdAt: now,
+      startedAt: now,
+      finishedAt: null,
+      updatedAt: now,
+    }
+    mockDocumentTasks.unshift(task)
+    setTimeout(() => Object.assign(task, {
+      status: 'COMPLETED',
+      totalSections: 6,
+      importedCount: 6,
+      finishedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }), 1_800)
+    return HttpResponse.json(task, { status: 202 })
+  }),
+  http.get('*/api/documents/tasks', () => HttpResponse.json(mockDocumentTasks)),
+  http.get('*/api/documents/tasks/:taskId', ({ params }) =>
+    responseOr404(mockDocumentTasks.find(item => item.taskId === params.taskId))),
+  http.get('*/api/documents/tasks/:taskId/knowledge', ({ params }) => {
+    const task = mockDocumentTasks.find(item => item.taskId === params.taskId)
+    if (!task) return problem(404, 'Not found', 'document import task not found')
+    return HttpResponse.json({
+      task,
+      items: mockKnowledgeReferences[String(params.taskId)] ?? [],
+      totalCount: mockKnowledgeReferences[String(params.taskId)]?.length ?? 0,
+    })
+  }),
+  http.post('*/api/documents/tasks/:taskId/retry', ({ params }) => {
+    const task = mockDocumentTasks.find(item => item.taskId === params.taskId)
+    if (!task) return problem(404, 'Not found', 'document import task not found')
+    Object.assign(task, {
+      status: 'PROCESSING',
+      retryCount: (task.retryCount ?? 0) + 1,
+      errorMessage: null,
+      updatedAt: new Date().toISOString(),
+    })
+    return HttpResponse.json(task)
+  }),
+  http.post('*/trust-rag/admin/knowledge/import', async () => {
+    await delay(180)
+    return HttpResponse.json({
+      importedCount: 1,
+      duplicateCount: 0,
+      failedCount: 0,
+      knowledgeIds: [9001],
+    }, { status: 201 })
+  }),
+  http.get('*/trust-rag/admin/knowledge/candidates', ({ request }) => {
+    const search = new URL(request.url).searchParams
+    const status = search.get('status') || 'HUMAN_REVIEW_PENDING'
+    const trustLevel = search.get('trustLevel') || 'MEDIUM'
+    return HttpResponse.json(mockReviewCandidates.filter(item =>
+      item.status === status && item.trustLevel === trustLevel))
+  }),
+  http.post('*/trust-rag/admin/knowledge/:id/approve-high', async ({ params, request }) => {
+    const item = mockReviewCandidates.find(candidate => candidate.id === Number(params.id))
+    if (!item) return problem(404, 'Not found', 'knowledge item not found')
+    const body = await request.json() as ReviewPayload
+    Object.assign(item, {
+      trustLevel: 'HIGH',
+      status: 'HIGH_ENABLED',
+      approvedBy: body.reviewerId,
+      approvedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    return HttpResponse.json(item)
+  }),
+  http.post('*/trust-rag/admin/knowledge/:id/reject', async ({ params, request }) => {
+    const item = mockReviewCandidates.find(candidate => candidate.id === Number(params.id))
+    if (!item) return problem(404, 'Not found', 'knowledge item not found')
+    const body = await request.json() as ReviewPayload
+    Object.assign(item, {
+      status: 'REJECTED',
+      rejectReason: body.comment ?? null,
+      updatedAt: new Date().toISOString(),
+    })
+    return HttpResponse.json(item)
+  }),
   http.get('*/trust-rag/admin/eval/datasets', ({ request }) => {
     const includeDisabled = new URL(request.url).searchParams.get('includeDisabled') === 'true'
     return HttpResponse.json(mockDatasets.filter(item => includeDisabled || item.enabled))

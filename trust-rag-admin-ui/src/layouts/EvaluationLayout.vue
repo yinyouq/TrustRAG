@@ -20,6 +20,7 @@ const navigation = [
   { to: '/eval/reports', label: '评估报告' },
   { to: '/eval/compare', label: '对比分析' },
   { to: '/eval/governance', label: '知识治理' },
+  { to: '/eval/knowledge', label: '知识库' },
 ]
 
 const activePath = computed(() => route.path)

@@ -48,6 +48,9 @@ class EvalCaseCsvImportServiceTest {
         assertThat(repository.listExpectedKnowledge(saved.id()))
                 .extracting(ExpectedKnowledge::knowledgeId)
                 .containsExactly(12L, 13L);
+        assertThat(repository.listExpectedKnowledge(saved.id()))
+                .extracting(ExpectedKnowledge::relevanceGrade)
+                .containsExactly(3, 3);
     }
 
     @Test

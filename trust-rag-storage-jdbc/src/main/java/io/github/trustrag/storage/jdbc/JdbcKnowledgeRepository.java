@@ -135,6 +135,42 @@ public final class JdbcKnowledgeRepository implements KnowledgeRepository {
     }
 
     @Override
+    public List<KnowledgeItem> findByDocumentId(String documentId, int limit, int offset) {
+        if (documentId == null || documentId.isBlank()) {
+            return List.of();
+        }
+        return jdbc.query("""
+                        SELECT * FROM knowledge_item
+                        WHERE document_id=:documentId
+                        ORDER BY
+                            COALESCE(page_number, 2147483647),
+                            COALESCE(chunk_index, 2147483647),
+                            id
+                        LIMIT :limit OFFSET :offset
+                        """,
+                new MapSqlParameterSource()
+                        .addValue("documentId", documentId)
+                        .addValue("limit", limit)
+                        .addValue("offset", offset),
+                rowMapper);
+    }
+
+    @Override
+    public long countByDocumentId(String documentId) {
+        if (documentId == null || documentId.isBlank()) {
+            return 0;
+        }
+        Long count = jdbc.queryForObject("""
+                        SELECT COUNT(*)
+                        FROM knowledge_item
+                        WHERE document_id=:documentId
+                        """,
+                Map.of("documentId", documentId),
+                Long.class);
+        return count == null ? 0 : count;
+    }
+
+    @Override
     public List<KnowledgeItem> findCandidates(
             KnowledgeStatus status,
             TrustLevel trustLevel,

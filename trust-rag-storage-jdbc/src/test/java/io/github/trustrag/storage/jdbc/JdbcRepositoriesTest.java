@@ -191,6 +191,40 @@ class JdbcRepositoriesTest {
     }
 
     @Test
+    void fillsCreatedAtForExpectedKnowledgeWithoutTimestamp() {
+        Instant now = Instant.parse("2026-06-16T00:00:00Z");
+        KnowledgeItem first = knowledgeRepository.save(new KnowledgeItem(
+                null, "expected title 1", "expected claim 1", "expected content 1", null, "test",
+                TrustLevel.HIGH, KnowledgeStatus.HIGH_ENABLED, ScopeType.GLOBAL,
+                null, null, null, null, "manual", "source", "evidence",
+                null, null, null, 1.0, 0.0, 1, "hash-expected-null-1",
+                null, null, null, now, now, null));
+        KnowledgeItem second = knowledgeRepository.save(new KnowledgeItem(
+                null, "expected title 2", "expected claim 2", "expected content 2", null, "test",
+                TrustLevel.HIGH, KnowledgeStatus.HIGH_ENABLED, ScopeType.GLOBAL,
+                null, null, null, null, "manual", "source", "evidence",
+                null, null, null, 1.0, 0.0, 1, "hash-expected-null-2",
+                null, null, null, now, now, null));
+        EvalDataset dataset = evaluationRepository.saveDataset(new EvalDataset(
+                null, "dataset", null, null, null, null, true, now, now));
+        EvalCase evalCase = evaluationRepository.saveCase(new EvalCase(
+                null, dataset.id(), "question", "answer",
+                null, null, null, null, List.of(), null, true, now, now));
+
+        evaluationRepository.replaceExpectedKnowledge(
+                evalCase.id(),
+                List.of(
+                        new ExpectedKnowledge(null, evalCase.id(), first.id(), 1, null),
+                        new ExpectedKnowledge(null, evalCase.id(), second.id(), 1, null)));
+
+        assertThat(evaluationRepository.listExpectedKnowledge(evalCase.id()))
+                .hasSize(2)
+                .allSatisfy(expected -> assertThat(expected.createdAt()).isNotNull())
+                .extracting(ExpectedKnowledge::knowledgeId)
+                .containsExactly(first.id(), second.id());
+    }
+
+    @Test
     void rollsBackCaseAndExpectedKnowledgeAsOneUnit() {
         Instant now = Instant.parse("2026-06-16T00:00:00Z");
         KnowledgeItem knowledge = knowledgeRepository.save(new KnowledgeItem(
@@ -243,8 +277,24 @@ class JdbcRepositoriesTest {
         DocumentImportTask saved = documentImportTaskRepository.save(task);
 
         assertThat(saved.id()).isPositive();
+        assertThat(documentImportTaskRepository.list(10, 0))
+                .extracting(DocumentImportTask::taskId)
+                .contains(saved.taskId());
         assertThat(documentImportTaskRepository.findByTaskId(saved.taskId()))
                 .contains(saved);
+        KnowledgeItem knowledge = knowledgeRepository.save(new KnowledgeItem(
+                null, "Guide / Section", null, "guide content", null, "document_chunk",
+                TrustLevel.HIGH, KnowledgeStatus.HIGH_ENABLED, ScopeType.GLOBAL,
+                null, null, "project-1", "tenant-1", "official_doc", "document://" + saved.taskId(),
+                "document://" + saved.taskId(), null, null, null, 1.0, 0.0, 1, "hash-doc-task-knowledge",
+                null, null, null, now, now, null,
+                KnowledgeGovernance.empty(),
+                new KnowledgeSourceMetadata("Guide", null, 1, "Intro", saved.taskId(), 0)));
+        assertThat(knowledgeRepository.findByDocumentId(saved.taskId(), 10, 0))
+                .singleElement()
+                .extracting(KnowledgeItem::id)
+                .isEqualTo(knowledge.id());
+        assertThat(knowledgeRepository.countByDocumentId(saved.taskId())).isEqualTo(1);
         assertThat(documentImportTaskRepository.findRunnable(3, 10))
                 .singleElement()
                 .extracting(DocumentImportTask::status)
@@ -254,7 +304,7 @@ class JdbcRepositoriesTest {
     }
 
     @Test
-    void leavesVectorScoreNullForKeywordOnlyRetrieval() {
+    void persistsLargeKeywordScoreAndLeavesVectorScoreNullForKeywordOnlyRetrieval() {
         Instant now = Instant.parse("2026-06-12T00:00:00Z");
         KnowledgeItem saved = knowledgeRepository.save(new KnowledgeItem(
                 null, "keyword title", "keyword claim", "keyword content", null, "test",
@@ -267,7 +317,7 @@ class JdbcRepositoriesTest {
         RetrievedChunk chunk = new RetrievedChunk(
                 saved.id(), saved.title(), saved.content(), saved.sourceRef(),
                 saved.trustLevel(), saved.scopeType(),
-                0.0, null, 8.5, 1, 1.0 / 61.0,
+                0.0, null, 123.456, 1, 1.0 / 61.0,
                 SearchType.KEYWORD_ONLY, null, 1.0, 1.0 / 61.0, true);
         trace.rewrittenQueries(List.of("keyword question"));
         trace.retrievedChunks(List.of(chunk));
@@ -284,7 +334,7 @@ class JdbcRepositoriesTest {
                         + "FROM retrieval_log WHERE trace_id=:traceId",
                 Map.of("traceId", trace.traceId()));
         assertThat(retrievalLog.get("vector_score")).isNull();
-        assertThat(retrievalLog.get("keyword_score")).isEqualTo(new java.math.BigDecimal("8.500000"));
+        assertThat(retrievalLog.get("keyword_score")).isEqualTo(new java.math.BigDecimal("123.456000"));
         assertThat(retrievalLog.get("search_type")).isEqualTo("KEYWORD_ONLY");
     }
 

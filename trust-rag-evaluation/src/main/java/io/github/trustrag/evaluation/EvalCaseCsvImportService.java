@@ -20,6 +20,7 @@ import java.util.Set;
 public final class EvalCaseCsvImportService {
 
     private static final Set<String> DIFFICULTIES = Set.of("EASY", "MEDIUM", "HARD");
+    private static final int DEFAULT_EXPECTED_KNOWLEDGE_RELEVANCE_GRADE = 3;
 
     private final EvalDatasetService datasetService;
     private final EvalCaseService caseService;
@@ -108,7 +109,12 @@ public final class EvalCaseCsvImportService {
                 if (knowledgeId <= 0) {
                     throw new NumberFormatException("not positive");
                 }
-                result.add(new ExpectedKnowledge(null, null, knowledgeId, 1, null));
+                result.add(new ExpectedKnowledge(
+                        null,
+                        null,
+                        knowledgeId,
+                        DEFAULT_EXPECTED_KNOWLEDGE_RELEVANCE_GRADE,
+                        null));
             } catch (NumberFormatException exception) {
                 throw new IllegalArgumentException(
                         "expected_knowledge_ids contains invalid ID: " + normalized);

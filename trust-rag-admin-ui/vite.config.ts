@@ -14,7 +14,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/trust-rag': 'http://localhost:8080',
+      '/trust-rag': 'http://localhost:9099',
+      '/api': 'http://localhost:9099',
     },
   },
   build: {

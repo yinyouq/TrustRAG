@@ -214,13 +214,15 @@ public class JdbcEvaluationRepository implements EvaluationRepository {
             return;
         }
         MapSqlParameterSource[] batch = new MapSqlParameterSource[expectedKnowledge.size()];
+        Instant defaultCreatedAt = Instant.now();
         for (int index = 0; index < expectedKnowledge.size(); index++) {
             ExpectedKnowledge item = expectedKnowledge.get(index);
+            Instant createdAt = item.createdAt() == null ? defaultCreatedAt : item.createdAt();
             batch[index] = new MapSqlParameterSource()
                     .addValue("evalCaseId", evalCaseId)
                     .addValue("knowledgeId", item.knowledgeId())
                     .addValue("relevanceGrade", item.relevanceGrade())
-                    .addValue("createdAt", timestamp(item.createdAt()));
+                    .addValue("createdAt", timestamp(createdAt));
         }
         jdbc.batchUpdate("""
                 INSERT INTO eval_case_expected_knowledge (

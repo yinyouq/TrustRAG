@@ -51,9 +51,11 @@ public class TrustRagAdminAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(DocumentImportService.class)
-    TrustRagDocumentController trustRagDocumentController(DocumentImportService service) {
-        return new TrustRagDocumentController(service);
+    @ConditionalOnBean({DocumentImportService.class, KnowledgeRepository.class})
+    TrustRagDocumentController trustRagDocumentController(
+            DocumentImportService service,
+            KnowledgeRepository knowledgeRepository) {
+        return new TrustRagDocumentController(service, knowledgeRepository);
     }
 
     @Bean

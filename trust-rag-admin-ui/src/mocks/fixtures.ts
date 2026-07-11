@@ -11,6 +11,7 @@ import type {
   EvalRun,
   ExpectedKnowledge,
 } from '@/api/types'
+import type { DocumentImportTask, KnowledgeItem, KnowledgeReferenceItem } from '@/api/knowledge'
 
 const now = '2026-06-20T12:00:00Z'
 
@@ -65,3 +66,102 @@ export const mockGovernance: EvalGovernanceSnapshot[] = Array.from({ length: 7 }
   contaminationRate: .07 - index * .005, privacyLeakageRate: index === 3 ? .01 : 0,
   gapResolveRate: .46 + index * .025, createdAt: now,
 }))
+
+export const mockDocumentTasks: DocumentImportTask[] = [
+  {
+    taskId: 'mock-doc-task-1',
+    sourceKind: 'UPLOAD',
+    status: 'COMPLETED',
+    title: 'TrustRAG 指南',
+    originalFilename: 'trust-rag-guide.md',
+    sourceUri: null,
+    sourceType: 'document',
+    trustLevel: 'HIGH',
+    scopeType: 'PROJECT',
+    userId: null,
+    conversationId: null,
+    projectId: 'trust-rag',
+    tenantId: 'demo',
+    totalDocuments: 1,
+    totalSections: 8,
+    importedCount: 8,
+    duplicateCount: 0,
+    failedCount: 0,
+    retryCount: 0,
+    errorMessage: null,
+    createdAt: now,
+    startedAt: now,
+    finishedAt: now,
+    updatedAt: now,
+  },
+]
+
+export const mockKnowledgeReferences: Record<string, KnowledgeReferenceItem[]> = {
+  'mock-doc-task-1': [
+    {
+      knowledgeId: 101,
+      expectedKnowledgeIds: '101',
+      title: 'TrustRAG 指南 / 缺口判断',
+      contentPreview: '系统会结合检索为空、低分、低可信知识和回答不确定性判断可能存在知识缺口。',
+      content: '系统会结合检索为空、低分、低可信知识和回答不确定性判断可能存在知识缺口，并记录 gap 类型和原因。',
+      scopeType: 'PROJECT',
+      tenantId: 'demo',
+      projectId: 'trust-rag',
+      userId: null,
+      conversationId: null,
+      trustLevel: 'HIGH',
+      status: 'HIGH_ENABLED',
+      sourceType: 'document',
+      sourceRef: 'document://mock-doc-task-1',
+      sourceTitle: 'TrustRAG 指南',
+      sourceUrl: null,
+      pageNumber: null,
+      sectionPath: '评估 / 缺口判断',
+      documentId: 'mock-doc-task-1',
+      chunkIndex: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      knowledgeId: 102,
+      expectedKnowledgeIds: '102',
+      title: 'TrustRAG 指南 / 混合检索',
+      contentPreview: '混合检索通过 RRF 融合 Milvus 向量检索和 OpenSearch 关键词检索结果。',
+      content: '混合检索通过 RRF 融合 Milvus 向量检索和 OpenSearch 关键词检索结果，并保留 vector_rank、keyword_rank、rrf_score 便于诊断。',
+      scopeType: 'PROJECT',
+      tenantId: 'demo',
+      projectId: 'trust-rag',
+      userId: null,
+      conversationId: null,
+      trustLevel: 'HIGH',
+      status: 'HIGH_ENABLED',
+      sourceType: 'document',
+      sourceRef: 'document://mock-doc-task-1',
+      sourceTitle: 'TrustRAG 指南',
+      sourceUrl: null,
+      pageNumber: null,
+      sectionPath: '检索 / Hybrid',
+      documentId: 'mock-doc-task-1',
+      chunkIndex: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ],
+}
+
+export const mockReviewCandidates: KnowledgeItem[] = [
+  {
+    id: 9001,
+    title: '候选知识：混合检索降级策略',
+    content: '当 Milvus 或 OpenSearch 单路不可用时，TrustRAG 会自动降级为另一条可用检索链路；两路都不可用时进入无上下文回答和知识缺口流程。',
+    trustLevel: 'MEDIUM',
+    status: 'HUMAN_REVIEW_PENDING',
+    scopeType: 'GLOBAL',
+    sourceType: 'internal_doc',
+    sourceRef: 'mock://review/hybrid-fallback',
+    confidence: 0.86,
+    privacyScore: 0,
+    createdAt: now,
+    updatedAt: now,
+  },
+]

@@ -15,6 +15,8 @@ public interface DocumentImportTaskRepository {
 
     Optional<DocumentImportTask> findByTaskId(String taskId);
 
+    List<DocumentImportTask> list(int limit, int offset);
+
     List<DocumentImportTask> findRunnable(int retryLimit, int limit);
 
     boolean claim(DocumentImportTask task, Instant now);

@@ -26,7 +26,7 @@ public final class OpenSearchQueryFactory {
 
         Query textQuery = new Query.Builder()
                 .multiMatch(multiMatch -> multiMatch
-                        .query(request.query())
+                        .query(OpenSearchKeywordQuerySanitizer.sanitize(request.query()))
                         .fields("title^3", "claim^2", "tags^2", "content"))
                 .build();
         return new Query.Builder()

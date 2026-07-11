@@ -6,6 +6,7 @@ import io.github.trustrag.core.exception.TrustRagException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Clock;
+import java.util.List;
 
 /**
  * 文档导入提交服务。
@@ -82,6 +83,12 @@ public final class DocumentImportService {
     public DocumentImportTask find(String taskId) {
         return taskRepository.findByTaskId(taskId)
                 .orElseThrow(() -> new DocumentImportTaskNotFoundException(taskId));
+    }
+
+    public List<DocumentImportTask> list(int limit, int offset) {
+        int safeLimit = Math.min(Math.max(limit, 1), 200);
+        int safeOffset = Math.max(offset, 0);
+        return taskRepository.list(safeLimit, safeOffset);
     }
 
     public DocumentImportTask retry(String taskId) {
