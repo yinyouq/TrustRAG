@@ -64,3 +64,8 @@ Desktop.ini
 
 # Superpowers visual brainstorming sessions
 .superpowers/
+
+# Markdown docs are kept local only, except the two repository README files.
+*.md
+!/README.md
+!/trust-rag-admin-ui/README.md
