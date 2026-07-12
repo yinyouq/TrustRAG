@@ -178,6 +178,39 @@ export interface MergeKnowledgePayload {
   sourceKnowledgeIds: number[]
 }
 
+export interface PromotionRunResponse {
+  createdTasks: number
+  processedTasks: number
+}
+
+export type PromotionTaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'SKIPPED'
+export type PromotionTaskType =
+  | 'LOW_TO_MEDIUM'
+  | 'RECHECK_CONFLICT'
+  | 'RECHECK_EXPIRED'
+  | 'MERGE_CHECK'
+  | 'INDEX_RETRY'
+
+export interface PromotionTask {
+  id: number
+  knowledgeId: number
+  status: PromotionTaskStatus
+  taskType: PromotionTaskType
+  retryCount: number
+  errorMessage?: string | null
+  startedAt?: string | null
+  finishedAt?: string | null
+  createdAt?: string | null
+}
+
+export interface PromotionTaskFilters {
+  status?: PromotionTaskStatus | null
+  taskType?: PromotionTaskType | null
+  knowledgeId?: number | null
+  limit?: number
+  offset?: number
+}
+
 export function createKnowledgeApi(client: AxiosInstance) {
   return {
     async uploadDocument(payload: DocumentUploadPayload) {
@@ -283,6 +316,22 @@ export function createKnowledgeApi(client: AxiosInstance) {
         `/trust-rag/admin/knowledge/${id}`,
         { data: payload },
       )).data
+    },
+    async runPromotion(limit = 50) {
+      return (await client.post<PromotionRunResponse>('/trust-rag/admin/promotion/run', null, {
+        params: { limit },
+      })).data
+    },
+    async listPromotionTasks(filters: PromotionTaskFilters = {}) {
+      return (await client.get<PromotionTask[]>('/trust-rag/admin/promotion/tasks', {
+        params: {
+          status: filters.status,
+          taskType: filters.taskType,
+          knowledgeId: filters.knowledgeId,
+          limit: filters.limit ?? 10,
+          offset: filters.offset ?? 0,
+        },
+      })).data
     },
   }
 }

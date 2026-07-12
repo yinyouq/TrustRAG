@@ -20,6 +20,7 @@ const router = createRouter({
         { path: 'compare', name: 'compare', component: () => import('@/views/CompareView.vue') },
         { path: 'governance', name: 'governance', component: () => import('@/views/GovernanceView.vue') },
         { path: 'knowledge', name: 'knowledge', component: () => import('@/views/KnowledgeView.vue') },
+        { path: 'knowledge-review', name: 'knowledge-review', component: () => import('@/views/KnowledgeReviewView.vue') },
       ],
     },
     { path: '/', redirect: '/eval' },

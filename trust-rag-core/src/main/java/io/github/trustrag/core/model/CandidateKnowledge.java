@@ -31,4 +31,13 @@ public record CandidateKnowledge(
                 title, claim, content, evidence, sourceType, sourceRef, scopeType,
                 trustLevel, status, confidence, Math.max(privacyRisk, value), tags);
     }
+
+    public CandidateKnowledge withTitle(String value) {
+        if (value == null || value.isBlank()) {
+            return this;
+        }
+        return new CandidateKnowledge(
+                value.trim(), claim, content, evidence, sourceType, sourceRef, scopeType,
+                trustLevel, status, confidence, privacyRisk, tags);
+    }
 }

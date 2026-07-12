@@ -11,6 +11,7 @@ import io.github.trustrag.core.config.PromotionOptions;
 import io.github.trustrag.core.config.RetrievalOptions;
 import io.github.trustrag.core.config.SourceScoreOptions;
 import io.github.trustrag.core.service.CandidateKnowledgeService;
+import io.github.trustrag.core.service.CorrectionTitleGenerator;
 import io.github.trustrag.core.service.DefaultCandidateExtractor;
 import io.github.trustrag.core.service.DefaultConflictDetector;
 import io.github.trustrag.core.service.DefaultDuplicateDetector;
@@ -595,6 +596,12 @@ public class TrustRagAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    CorrectionTitleGenerator correctionTitleGenerator(ObjectProvider<LlmClient> llmClient) {
+        return new CorrectionTitleGenerator(llmClient.getIfAvailable());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     ChunkStrategy chunkStrategy(TrustRagProperties properties) {
         return new RecursiveTextChunkStrategy(
                 properties.getChunk().getSize(),
@@ -655,11 +662,13 @@ public class TrustRagAutoConfiguration {
             ScopeClassifier scopeClassifier,
             CandidateExtractor candidateExtractor,
             CandidateKnowledgeService candidateKnowledgeService,
-            TransactionRunner transactionRunner) {
+            TransactionRunner transactionRunner,
+            CorrectionTitleGenerator correctionTitleGenerator) {
         return new DefaultTrustRagFeedbackService(
                 feedbackRepository, traceRepository, knowledgeRepository,
                 privacyFilter, scopeClassifier,
-                candidateExtractor, candidateKnowledgeService, transactionRunner);
+                candidateExtractor, candidateKnowledgeService, transactionRunner,
+                correctionTitleGenerator);
     }
 
     @Bean

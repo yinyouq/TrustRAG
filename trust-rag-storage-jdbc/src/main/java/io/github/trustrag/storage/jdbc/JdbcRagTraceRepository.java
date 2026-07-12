@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -60,6 +61,15 @@ public class JdbcRagTraceRepository implements RagTraceRepository {
                 Map.of("traceId", traceId),
                 Integer.class);
         return count != null && count > 0;
+    }
+
+    @Override
+    public Optional<String> findQuestionByTraceId(String traceId) {
+        List<String> questions = jdbc.queryForList(
+                "SELECT question FROM rag_trace WHERE trace_id=:traceId",
+                Map.of("traceId", traceId),
+                String.class);
+        return questions.stream().findFirst();
     }
 
     @Override

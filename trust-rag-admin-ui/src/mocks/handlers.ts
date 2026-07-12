@@ -3,13 +3,14 @@
  */
 import { delay, http, HttpResponse } from 'msw'
 import type { EvalCase, EvalDataset, EvalRun } from '@/api/types'
-import type { DocumentImportTask, KnowledgeItem, LifecyclePayload, MergeKnowledgePayload, ReviewPayload } from '@/api/knowledge'
-import { mockCases, mockDatasets, mockDocumentTasks, mockExpected, mockGovernance, mockJudgeDetails, mockKnowledgeReferences, mockReports, mockResults, mockReviewCandidates, mockRuns } from './fixtures'
+import type { DocumentImportTask, KnowledgeItem, LifecyclePayload, MergeKnowledgePayload, PromotionTask, ReviewPayload } from '@/api/knowledge'
+import { mockCases, mockDatasets, mockDocumentTasks, mockExpected, mockGovernance, mockJudgeDetails, mockKnowledgeReferences, mockPromotionTasks, mockReports, mockResults, mockReviewCandidates, mockRuns } from './fixtures'
 
 let nextDatasetId = 20
 let nextCaseId = 50
 let nextRunId = 200
 let nextDocumentTaskId = 2
+let nextPromotionTaskId = 600
 
 export const handlers = [
   http.post('*/api/documents/upload', async ({ request }) => {
@@ -95,9 +96,59 @@ export const handlers = [
     const search = new URL(request.url).searchParams
     const trustLevel = search.get('trustLevel')
     const status = search.get('status')
-    return HttpResponse.json(allKnowledgeItems().filter(item =>
+    const limit = Number(search.get('limit') ?? 50)
+    const offset = Number(search.get('offset') ?? 0)
+    const rows = allKnowledgeItems().filter(item =>
       (!trustLevel || item.trustLevel === trustLevel)
-      && (!status || item.status === status)))
+      && (!status || item.status === status))
+    return HttpResponse.json(rows.slice(offset, offset + limit))
+  }),
+  http.post('*/trust-rag/admin/promotion/run', ({ request }) => {
+    const limit = Number(new URL(request.url).searchParams.get('limit') ?? 50)
+    const candidates = mockReviewCandidates.filter(item =>
+      item.trustLevel === 'LOW'
+      && ['LOW_PENDING', 'LOW_ENABLED', 'PROMOTION_PENDING'].includes(item.status))
+    const processed = Math.min(candidates.length, limit)
+    candidates.slice(0, processed).forEach((item, index) => {
+      const task: PromotionTask = {
+        id: nextPromotionTaskId++,
+        knowledgeId: item.id,
+        status: 'SUCCESS',
+        taskType: 'LOW_TO_MEDIUM',
+        retryCount: 0,
+        errorMessage: null,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      }
+      if (index === 0) {
+        Object.assign(item, {
+          trustLevel: 'MEDIUM',
+          status: 'HUMAN_REVIEW_PENDING',
+          updatedAt: new Date().toISOString(),
+        })
+      } else {
+        Object.assign(item, {
+          status: 'LOW_ENABLED',
+          updatedAt: new Date().toISOString(),
+        })
+      }
+      mockPromotionTasks.unshift(task)
+    })
+    return HttpResponse.json({ createdTasks: processed, processedTasks: processed })
+  }),
+  http.get('*/trust-rag/admin/promotion/tasks', ({ request }) => {
+    const search = new URL(request.url).searchParams
+    const status = search.get('status')
+    const taskType = search.get('taskType')
+    const knowledgeId = Number(search.get('knowledgeId') || 0)
+    const limit = Number(search.get('limit') ?? 10)
+    const offset = Number(search.get('offset') ?? 0)
+    const rows = mockPromotionTasks.filter(item =>
+      (!status || item.status === status)
+      && (!taskType || item.taskType === taskType)
+      && (!knowledgeId || item.knowledgeId === knowledgeId))
+    return HttpResponse.json(rows.slice(offset, offset + limit))
   }),
   http.get('*/trust-rag/admin/knowledge/:id', ({ params }) =>
     responseOr404(findKnowledge(Number(params.id)))),

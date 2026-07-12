@@ -21,6 +21,7 @@ const navigation = [
   { to: '/eval/compare', label: '对比分析' },
   { to: '/eval/governance', label: '知识治理' },
   { to: '/eval/knowledge', label: '知识库' },
+  { to: '/eval/knowledge-review', label: '知识审核' },
 ]
 
 const activePath = computed(() => route.path)

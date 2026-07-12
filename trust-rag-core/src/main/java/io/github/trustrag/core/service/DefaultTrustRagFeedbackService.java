@@ -16,8 +16,8 @@ import io.github.trustrag.core.spi.RagTraceRepository;
 import io.github.trustrag.core.spi.ScopeClassifier;
 import io.github.trustrag.core.spi.TransactionRunner;
 
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 默认反馈回流服务。
@@ -35,6 +35,7 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
     private final CandidateExtractor candidateExtractor;
     private final CandidateKnowledgeService candidateKnowledgeService;
     private final TransactionRunner transactionRunner;
+    private final CorrectionTitleGenerator correctionTitleGenerator;
 
     public DefaultTrustRagFeedbackService(
             FeedbackRepository feedbackRepository,
@@ -45,6 +46,23 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
             CandidateExtractor candidateExtractor,
             CandidateKnowledgeService candidateKnowledgeService,
             TransactionRunner transactionRunner) {
+        this(
+                feedbackRepository, traceRepository, knowledgeRepository,
+                privacyFilter, scopeClassifier, candidateExtractor,
+                candidateKnowledgeService, transactionRunner,
+                new CorrectionTitleGenerator(null));
+    }
+
+    public DefaultTrustRagFeedbackService(
+            FeedbackRepository feedbackRepository,
+            RagTraceRepository traceRepository,
+            KnowledgeRepository knowledgeRepository,
+            PrivacyFilter privacyFilter,
+            ScopeClassifier scopeClassifier,
+            CandidateExtractor candidateExtractor,
+            CandidateKnowledgeService candidateKnowledgeService,
+            TransactionRunner transactionRunner,
+            CorrectionTitleGenerator correctionTitleGenerator) {
         this.feedbackRepository = feedbackRepository;
         this.traceRepository = traceRepository;
         this.knowledgeRepository = knowledgeRepository;
@@ -53,6 +71,9 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
         this.candidateExtractor = candidateExtractor;
         this.candidateKnowledgeService = candidateKnowledgeService;
         this.transactionRunner = transactionRunner;
+        this.correctionTitleGenerator = correctionTitleGenerator == null
+                ? new CorrectionTitleGenerator(null)
+                : correctionTitleGenerator;
     }
 
     @Override
@@ -75,18 +96,23 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
             throw new InvalidRagRequestException("correctedAnswer must not be blank for correction feedback");
         }
 
+        PrivacyResult questionPrivacy = sanitizeOptional(
+                traceRepository.findQuestionByTraceId(request.traceId()).orElse(null));
         ScopeContext context = new ScopeContext(
                 request.userId(), request.conversationId(), request.projectId(), request.tenantId());
         ScopeType scope = scopeClassifier.classify(correctionPrivacy.sanitizedContent(), context);
-        if (!correctionPrivacy.allowed() || !feedbackPrivacy.allowed()) {
+        if (!correctionPrivacy.allowed() || !feedbackPrivacy.allowed() || !questionPrivacy.allowed()) {
             // 含敏感信息的纠错只能落到最窄可用作用域，禁止扩散到项目或全局范围。
             scope = narrowestPrivateScope(context);
         }
+        String title = correctionTitleGenerator.generate(
+                questionPrivacy.sanitizedContent(), correctionPrivacy.sanitizedContent());
         CandidateKnowledge candidate = candidateExtractor.extractCorrection(
                 sanitized, correctionPrivacy.sanitizedContent(), scope)
+                .withTitle(title)
                 .withPrivacyRisk(Math.max(
-                        correctionPrivacy.allowed() ? 0.0 : Math.max(0.80, correctionPrivacy.riskScore()),
-                        feedbackPrivacy.allowed() ? 0.0 : Math.max(0.80, feedbackPrivacy.riskScore())));
+                        Math.max(privacyRisk(correctionPrivacy), privacyRisk(feedbackPrivacy)),
+                        privacyRisk(questionPrivacy)));
         return transactionRunner.required(() -> {
             feedbackRepository.save(sanitized);
             updateFeedbackCounters(request);
@@ -107,6 +133,10 @@ public final class DefaultTrustRagFeedbackService implements TrustRagFeedbackSer
 
     private PrivacyResult sanitizeOptional(String value) {
         return value == null || value.isBlank() ? PrivacyResult.allowed(value) : privacyFilter.filter(value);
+    }
+
+    private double privacyRisk(PrivacyResult result) {
+        return result.allowed() ? 0.0 : Math.max(0.80, result.riskScore());
     }
 
     private ScopeType narrowestPrivateScope(ScopeContext context) {

@@ -119,6 +119,7 @@ class JdbcRepositoriesTest {
         traceRepository.save(trace);
 
         assertThat(traceRepository.existsByTraceId(trace.traceId())).isTrue();
+        assertThat(traceRepository.findQuestionByTraceId(trace.traceId())).contains("question");
         Map<String, Object> retrievalLog = jdbc.queryForMap(
                 "SELECT * FROM retrieval_log WHERE trace_id=:traceId",
                 Map.of("traceId", trace.traceId()));

@@ -8,7 +8,7 @@ CREATE TABLE knowledge_item (
     privacy_score DECIMAL(5,4), version INT NOT NULL DEFAULT 1, hash VARCHAR(64) NOT NULL UNIQUE,
     approved_by VARCHAR(64), approved_at TIMESTAMP, reject_reason CLOB,
     created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, expires_at TIMESTAMP,
-    promotion_stage VARCHAR(32), promotion_score DECIMAL(5,4), llm_pre_review_result CLOB,
+    promotion_stage VARCHAR(64), promotion_score DECIMAL(5,4), llm_pre_review_result CLOB,
     normalized_claim CLOB, claim_hash VARCHAR(64), llm_score DECIMAL(5,4),
     source_score DECIMAL(5,4), evidence_score DECIMAL(5,4), feedback_score DECIMAL(5,4),
     usage_score DECIMAL(5,4), general_value_score DECIMAL(5,4),

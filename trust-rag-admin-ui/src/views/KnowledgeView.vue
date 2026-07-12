@@ -2,7 +2,7 @@
 // 知识库管理页，提供文档导入任务、手动知识导入和评估知识 ID 参考。
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check, Close, Delete, Download, Refresh, RefreshLeft, Search, UploadFilled } from '@element-plus/icons-vue'
+import { Check, Delete, Download, Refresh, RefreshLeft, Search, UploadFilled } from '@element-plus/icons-vue'
 import { knowledgeApi } from '@/api'
 import type {
   DocumentImportStatus,
@@ -10,7 +10,6 @@ import type {
   KnowledgeImportResult,
   KnowledgeReferenceItem,
   KnowledgeItem,
-  KnowledgeStatus,
   ScopeType,
   TrustLevel,
 } from '@/api/knowledge'
@@ -20,47 +19,26 @@ import { formatDateTime } from '@/utils/format'
 const store = useAppStore()
 const trustOptions: TrustLevel[] = ['HIGH', 'MEDIUM', 'LOW']
 const scopeOptions: ScopeType[] = ['GLOBAL', 'TENANT', 'PROJECT', 'USER', 'CONVERSATION']
-const statusOptions: KnowledgeStatus[] = [
-  'HIGH_ENABLED',
-  'MEDIUM_ENABLED',
-  'HUMAN_REVIEW_PENDING',
-  'LOW_ENABLED',
-  'LOW_PENDING',
-  'PROMOTION_PENDING',
-  'PROMOTION_RUNNING',
-  'INDEXING',
-  'INDEX_FAILED',
-  'REJECTED',
-  'CONFLICT',
-  'EXPIRED',
-  'MERGE_PENDING',
-  'ROLLBACK',
-]
 
 const documentSaving = ref(false)
 const taskLoading = ref(false)
 const importSaving = ref(false)
-const reviewLoading = ref(false)
 const libraryLoading = ref(false)
 const knowledgeLoading = ref(false)
 const governanceLoading = ref(false)
 const governanceActionLoading = ref(false)
-const reviewSavingId = ref<number | null>(null)
 const selectedFile = ref<File | null>(null)
 const taskId = ref('')
 const currentTask = ref<DocumentImportTask | null>(null)
 const importResult = ref<KnowledgeImportResult | null>(null)
-const reviewCandidates = ref<KnowledgeItem[]>([])
 const documentLibraries = ref<DocumentImportTask[]>([])
 const selectedLibrary = ref<DocumentImportTask | null>(null)
 const libraryKnowledge = ref<KnowledgeReferenceItem[]>([])
-const governanceKnowledge = ref<KnowledgeItem[]>([])
 const selectedGovernanceKnowledge = ref<KnowledgeItem | null>(null)
 const knowledgePage = ref(1)
 const knowledgePageSize = 10
 const knowledgeTotal = ref(0)
-const reviewerId = ref(localStorage.getItem('trust-rag.reviewer-id') || 'admin')
-const operatorId = ref(localStorage.getItem('trust-rag.operator-id') || reviewerId.value)
+const operatorId = ref(localStorage.getItem('trust-rag.operator-id') || 'admin')
 
 const documentForm = reactive({
   title: '',
@@ -87,11 +65,6 @@ const manualForm = reactive({
   tenantId: store.tenantId,
 })
 
-const governanceFilters = reactive({
-  trustLevel: 'HIGH' as TrustLevel | '',
-  status: 'HIGH_ENABLED' as KnowledgeStatus | '',
-})
-
 const governanceForm = reactive({
   lookupId: '',
   targetKnowledgeId: '',
@@ -115,8 +88,6 @@ const libraryScopeItems = computed(() => {
 
 onMounted(() => {
   loadDocumentLibraries()
-  loadGovernanceKnowledge()
-  loadReviewCandidates()
 })
 
 function onFileChange(event: Event) {
@@ -238,27 +209,6 @@ async function importKnowledge() {
   }
 }
 
-async function loadGovernanceKnowledge() {
-  governanceLoading.value = true
-  try {
-    governanceKnowledge.value = await knowledgeApi.listKnowledge({
-      trustLevel: governanceFilters.trustLevel || null,
-      status: governanceFilters.status || null,
-      limit: 50,
-      offset: 0,
-    })
-    if (selectedGovernanceKnowledge.value) {
-      selectedGovernanceKnowledge.value = governanceKnowledge.value.find(
-        item => item.id === selectedGovernanceKnowledge.value?.id,
-      ) ?? selectedGovernanceKnowledge.value
-    }
-  } catch (reason) {
-    ElMessage.error(message(reason))
-  } finally {
-    governanceLoading.value = false
-  }
-}
-
 async function lookupGovernanceKnowledge() {
   const id = Number(governanceForm.lookupId)
   if (!Number.isInteger(id) || id <= 0) {
@@ -269,7 +219,6 @@ async function lookupGovernanceKnowledge() {
   try {
     const item = await knowledgeApi.getKnowledge(id)
     selectGovernanceKnowledge(item)
-    upsertGovernanceKnowledge(item)
   } catch (reason) {
     ElMessage.error(message(reason))
   } finally {
@@ -289,7 +238,6 @@ async function downgradeSelectedKnowledge() {
   if (!reason) return
   await runGovernanceAction(async () => {
     const changed = await knowledgeApi.downgradeKnowledge(item.id, lifecyclePayload(reason))
-    upsertGovernanceKnowledge(changed)
     selectedGovernanceKnowledge.value = changed
     ElMessage.success('知识已降级')
   })
@@ -302,7 +250,6 @@ async function rollbackSelectedKnowledge() {
   if (!reason) return
   await runGovernanceAction(async () => {
     const changed = await knowledgeApi.rollbackKnowledge(item.id, lifecyclePayload(reason))
-    upsertGovernanceKnowledge(changed)
     selectedGovernanceKnowledge.value = changed
     ElMessage.success('知识已回滚')
   })
@@ -315,7 +262,6 @@ async function deleteSelectedKnowledge() {
   if (!reason) return
   await runGovernanceAction(async () => {
     const changed = await knowledgeApi.deleteKnowledge(item.id, lifecyclePayload(reason))
-    upsertGovernanceKnowledge(changed)
     selectedGovernanceKnowledge.value = changed
     ElMessage.success('知识已删除并退出检索')
   })
@@ -343,10 +289,8 @@ async function mergeKnowledgeItems() {
       targetKnowledgeId,
       sourceKnowledgeIds,
     })
-    upsertGovernanceKnowledge(target)
-    selectedGovernanceKnowledge.value = target
+    selectGovernanceKnowledge(target)
     ElMessage.success('知识已合并，源知识已退出检索')
-    await loadGovernanceKnowledge()
   })
 }
 
@@ -402,92 +346,6 @@ function parseKnowledgeIds(value: string) {
     .split(/[,\s，]+/)
     .map(item => Number(item.trim()))
     .filter(item => Number.isInteger(item) && item > 0)
-}
-
-function upsertGovernanceKnowledge(item: KnowledgeItem) {
-  const index = governanceKnowledge.value.findIndex(value => value.id === item.id)
-  if (index >= 0) {
-    governanceKnowledge.value[index] = item
-  } else {
-    governanceKnowledge.value.unshift(item)
-  }
-}
-
-async function loadReviewCandidates() {
-  reviewLoading.value = true
-  try {
-    reviewCandidates.value = await knowledgeApi.listReviewCandidates({
-      status: 'HUMAN_REVIEW_PENDING',
-      trustLevel: 'MEDIUM',
-      limit: 50,
-      offset: 0,
-    })
-  } catch (reason) {
-    ElMessage.error(message(reason))
-  } finally {
-    reviewLoading.value = false
-  }
-}
-
-async function approveCandidate(item: KnowledgeItem) {
-  if (!reviewerId.value.trim()) {
-    ElMessage.warning('请输入审核人 ID')
-    return
-  }
-  try {
-    const { value } = await ElMessageBox.prompt(
-      '可填写审核说明，也可以在通过前修改标题或正文。',
-      '通过为高可信',
-      {
-        inputValue: '来源和内容已确认',
-        confirmButtonText: '通过',
-        cancelButtonText: '取消',
-      },
-    )
-    persistReviewer()
-    reviewSavingId.value = item.id
-    await knowledgeApi.approveHigh(item.id, {
-      reviewerId: reviewerId.value.trim(),
-      comment: value || null,
-    })
-    ElMessage.success('已通过审核并进入高可信池')
-    await loadReviewCandidates()
-  } catch (reason) {
-    if (reason !== 'cancel' && reason !== 'close') ElMessage.error(message(reason))
-  } finally {
-    reviewSavingId.value = null
-  }
-}
-
-async function rejectCandidate(item: KnowledgeItem) {
-  if (!reviewerId.value.trim()) {
-    ElMessage.warning('请输入审核人 ID')
-    return
-  }
-  try {
-    const { value } = await ElMessageBox.prompt(
-      '请输入驳回原因，便于后续治理追踪。',
-      '驳回知识',
-      {
-        inputType: 'textarea',
-        inputValidator: value => Boolean(value?.trim()) || '请输入驳回原因',
-        confirmButtonText: '驳回',
-        cancelButtonText: '取消',
-      },
-    )
-    persistReviewer()
-    reviewSavingId.value = item.id
-    await knowledgeApi.rejectCandidate(item.id, {
-      reviewerId: reviewerId.value.trim(),
-      comment: value.trim(),
-    })
-    ElMessage.success('已驳回')
-    await loadReviewCandidates()
-  } catch (reason) {
-    if (reason !== 'cancel' && reason !== 'close') ElMessage.error(message(reason))
-  } finally {
-    reviewSavingId.value = null
-  }
 }
 
 function statusType(status: DocumentImportStatus) {
@@ -606,10 +464,6 @@ function csvCell(value: unknown) {
     return `"${text.replaceAll('"', '""')}"`
   }
   return text
-}
-
-function persistReviewer() {
-  localStorage.setItem('trust-rag.reviewer-id', reviewerId.value.trim())
 }
 
 function message(reason: unknown) {
@@ -787,7 +641,6 @@ function message(reason: unknown) {
         </div>
         <div class="review-actions">
           <el-input v-model="operatorId" placeholder="操作人 ID" clearable />
-          <el-button :icon="Refresh" :loading="governanceLoading" @click="loadGovernanceKnowledge">刷新</el-button>
         </div>
       </div>
 
@@ -796,13 +649,6 @@ function message(reason: unknown) {
         <el-button type="primary" :icon="Search" :loading="governanceLoading" @click="lookupGovernanceKnowledge">
           查询
         </el-button>
-        <el-select v-model="governanceFilters.trustLevel" placeholder="信任级别" clearable>
-          <el-option v-for="item in trustOptions" :key="item" :label="item" :value="item" />
-        </el-select>
-        <el-select v-model="governanceFilters.status" placeholder="状态" clearable>
-          <el-option v-for="item in statusOptions" :key="item" :label="item" :value="item" />
-        </el-select>
-        <el-button :icon="Refresh" :loading="governanceLoading" @click="loadGovernanceKnowledge">应用筛选</el-button>
       </div>
 
       <el-descriptions v-if="selectedGovernanceKnowledge" class="block-gap" :column="3" border>
@@ -873,39 +719,6 @@ function message(reason: unknown) {
         </div>
       </el-form>
 
-      <el-table
-        v-loading="governanceLoading"
-        class="block-gap"
-        :data="governanceKnowledge"
-        empty-text="暂无符合条件的知识"
-        highlight-current-row
-        row-key="id"
-        @row-click="selectGovernanceKnowledge"
-      >
-        <el-table-column label="knowledge_id" width="130">
-          <template #default="{ row }">
-            <el-tag type="success">{{ row.id }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="知识" min-width="340">
-          <template #default="{ row }">
-            <strong>{{ row.title }}</strong>
-            <small class="table-note">{{ row.content }}</small>
-          </template>
-        </el-table-column>
-        <el-table-column label="Scope" min-width="160">
-          <template #default="{ row }">{{ scopeText(row) || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="170">
-          <template #default="{ row }">
-            <el-tag type="warning">{{ row.trustLevel }}</el-tag>
-            <el-tag class="collapse-tag" type="info">{{ row.status }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="更新时间" width="150">
-          <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
-        </el-table-column>
-      </el-table>
     </div>
 
     <div class="content-panel block-gap table-panel">
@@ -1025,72 +838,5 @@ function message(reason: unknown) {
       </div>
     </div>
 
-    <div class="content-panel block-gap table-panel">
-      <div class="section-heading compact-heading">
-        <div>
-          <span class="eyebrow">REVIEW</span>
-          <h2>人工审核</h2>
-          <p class="quiet">审核 HUMAN_REVIEW_PENDING 的中可信知识，通过后会进入高可信池。</p>
-        </div>
-        <div class="review-actions">
-          <el-input v-model="reviewerId" placeholder="审核人 ID" clearable />
-          <el-button :icon="Refresh" :loading="reviewLoading" @click="loadReviewCandidates">刷新</el-button>
-        </div>
-      </div>
-
-      <el-table
-        v-loading="reviewLoading"
-        class="block-gap"
-        :data="reviewCandidates"
-        empty-text="暂无待审核知识"
-      >
-        <el-table-column label="知识" min-width="310">
-          <template #default="{ row }">
-            <strong>{{ row.title }}</strong>
-            <small class="table-note">{{ row.content }}</small>
-          </template>
-        </el-table-column>
-        <el-table-column label="来源" min-width="180">
-          <template #default="{ row }">
-            {{ row.sourceType || '-' }}
-            <small class="table-note">{{ row.sourceRef || '暂无来源引用' }}</small>
-          </template>
-        </el-table-column>
-        <el-table-column label="Scope" min-width="180">
-          <template #default="{ row }">{{ scopeText(row) || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="170">
-          <template #default="{ row }">
-            <el-tag type="warning">{{ row.trustLevel }}</el-tag>
-            <el-tag class="collapse-tag" type="info">{{ row.status }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="更新时间" width="150">
-          <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="230" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              :icon="Check"
-              :loading="reviewSavingId === row.id"
-              @click="approveCandidate(row)"
-            >
-              通过为高可信
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              :icon="Close"
-              :loading="reviewSavingId === row.id"
-              @click="rejectCandidate(row)"
-            >
-              驳回
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
   </section>
 </template>

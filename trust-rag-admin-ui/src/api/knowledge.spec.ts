@@ -234,4 +234,58 @@ describe('knowledge API', () => {
     expect(bodies.merge).toEqual({ operatorId: 'admin', targetKnowledgeId: 99, sourceKnowledgeIds: [88] })
     expect(bodies.delete).toEqual({ operatorId: 'admin', reason: '删除错误知识' })
   })
+
+  it('runs promotion tasks through admin governance endpoint', async () => {
+    let promotionUrl = ''
+    server.use(
+      http.post('*/trust-rag/admin/promotion/run', ({ request }) => {
+        promotionUrl = request.url
+        return HttpResponse.json({ createdTasks: 2, processedTasks: 1 })
+      }),
+    )
+    const api = createKnowledgeApi(axios.create())
+
+    const result = await api.runPromotion(25)
+
+    const search = new URL(promotionUrl).searchParams
+    expect(search.get('limit')).toBe('25')
+    expect(result).toEqual({ createdTasks: 2, processedTasks: 1 })
+  })
+
+  it('lists promotion task records through admin governance endpoint', async () => {
+    let taskUrl = ''
+    server.use(
+      http.get('*/trust-rag/admin/promotion/tasks', ({ request }) => {
+        taskUrl = request.url
+        return HttpResponse.json([{
+          id: 501,
+          knowledgeId: 88,
+          status: 'FAILED',
+          taskType: 'LOW_TO_MEDIUM',
+          retryCount: 1,
+          errorMessage: 'index failed',
+          startedAt: '2026-06-20T12:00:00Z',
+          finishedAt: '2026-06-20T12:00:01Z',
+          createdAt: '2026-06-20T12:00:00Z',
+        }])
+      }),
+    )
+    const api = createKnowledgeApi(axios.create())
+
+    const tasks = await api.listPromotionTasks({
+      status: 'FAILED',
+      taskType: 'LOW_TO_MEDIUM',
+      knowledgeId: 88,
+      limit: 10,
+      offset: 5,
+    })
+
+    const search = new URL(taskUrl).searchParams
+    expect(search.get('status')).toBe('FAILED')
+    expect(search.get('taskType')).toBe('LOW_TO_MEDIUM')
+    expect(search.get('knowledgeId')).toBe('88')
+    expect(search.get('limit')).toBe('10')
+    expect(search.get('offset')).toBe('5')
+    expect(tasks[0].errorMessage).toBe('index failed')
+  })
 })
