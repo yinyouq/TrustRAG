@@ -26,9 +26,12 @@ coverage/
 
 # VS Code
 .vscode/
+.history/
+**/.history/
 
 # Runtime files
 *.log
+*.err
 logs/
 *.pid
 *.hprof
@@ -65,7 +68,8 @@ Desktop.ini
 # Superpowers visual brainstorming sessions
 .superpowers/
 
-# Markdown docs are kept local only, except the two repository README files.
-*.md
+# Keep root-level design notes and project summaries local.
+# Markdown documentation inside project modules remains publishable.
+/*.md
 !/README.md
-!/trust-rag-admin-ui/README.md
+/docs/superpowers/
