@@ -213,3 +213,32 @@ export interface EvalCaseCsvImportResult {
   failedRows: number
   errors: Array<{ rowNumber: number; message: string }>
 }
+
+export type InfrastructureMemoryStatus = 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'DISABLED'
+
+/** 只涵盖 Milvus 与 OpenSearch 的容器内存快照。 */
+export interface InfrastructureMemorySnapshot {
+  status: InfrastructureMemoryStatus
+  message: string
+  sampledAt: string
+  windowMinutes: number
+  workingSetBytes: number
+  rssBytes: number
+  peakWorkingSetBytes: number
+  services: InfrastructureMemoryService[]
+  workingSetTrend: InfrastructureMemoryPoint[]
+}
+
+export interface InfrastructureMemoryService {
+  service: string
+  displayName: string
+  available: boolean
+  workingSetBytes: number
+  rssBytes: number
+  peakWorkingSetBytes: number
+}
+
+export interface InfrastructureMemoryPoint {
+  timestamp: string
+  workingSetBytes: number
+}

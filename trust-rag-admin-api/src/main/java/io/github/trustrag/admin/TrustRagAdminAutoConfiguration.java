@@ -23,6 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -31,6 +32,7 @@ import org.springframework.context.annotation.Bean;
 @AutoConfiguration(afterName = "io.github.trustrag.starter.TrustRagAutoConfiguration")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = "trust-rag.admin-api", name = "enabled", havingValue = "true")
+@EnableConfigurationProperties(InfrastructureMemoryProperties.class)
 public class TrustRagAdminAutoConfiguration {
 
     @Bean
@@ -105,6 +107,25 @@ public class TrustRagAdminAutoConfiguration {
         return new TrustRagGovernanceController(
                 taskService, worker, conflictRepository,
                 knowledgeRepository, lifecycleManager);
+    }
+
+    @Bean
+    InfrastructureMemoryMetricSource infrastructureMemoryMetricSource(
+            InfrastructureMemoryProperties properties) {
+        return new PrometheusInfrastructureMemoryMetricSource(properties);
+    }
+
+    @Bean
+    InfrastructureMemoryService infrastructureMemoryService(
+            InfrastructureMemoryProperties properties,
+            InfrastructureMemoryMetricSource source) {
+        return new InfrastructureMemoryService(properties, source);
+    }
+
+    @Bean
+    InfrastructureMemoryController infrastructureMemoryController(
+            InfrastructureMemoryService service) {
+        return new InfrastructureMemoryController(service);
     }
 
     @Bean

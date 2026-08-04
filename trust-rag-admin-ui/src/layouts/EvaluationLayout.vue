@@ -20,6 +20,7 @@ const navigation = [
   { to: '/eval/reports', label: '评估报告' },
   { to: '/eval/compare', label: '对比分析' },
   { to: '/eval/governance', label: '知识治理' },
+  { to: '/eval/infrastructure-memory', label: '基础设施运行内存' },
   { to: '/eval/knowledge', label: '知识库' },
   { to: '/eval/knowledge-review', label: '知识审核' },
 ]

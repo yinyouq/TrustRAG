@@ -8,6 +8,7 @@ public record MilvusSettings(
         String collection,
         int dimension,
         String metricType,
+        String indexType,
         boolean autoCreateCollection) {
 
     public MilvusSettings {
@@ -19,5 +20,6 @@ public record MilvusSettings(
         }
         database = database == null || database.isBlank() ? "default" : database;
         metricType = metricType == null || metricType.isBlank() ? "COSINE" : metricType;
+        indexType = indexType == null || indexType.isBlank() ? "AUTOINDEX" : indexType.trim();
     }
 }

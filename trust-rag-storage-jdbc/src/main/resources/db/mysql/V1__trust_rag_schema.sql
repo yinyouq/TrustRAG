@@ -14,43 +14,12 @@ CREATE TABLE knowledge_item (
     tenant_id VARCHAR(64),
     source_type VARCHAR(64),
     source_ref TEXT,
-    source_title VARCHAR(512),
-    source_url TEXT,
-    page_number INT,
-    section_path TEXT,
-    document_id VARCHAR(64),
-    chunk_index INT,
     evidence TEXT,
     embedding_id VARCHAR(128),
     embedding_model VARCHAR(128),
     embedding_dimension INT,
     confidence DECIMAL(5,4),
     privacy_score DECIMAL(5,4),
-    promotion_stage VARCHAR(64),
-    promotion_score DECIMAL(5,4),
-    llm_pre_review_result TEXT,
-    normalized_claim TEXT,
-    claim_hash VARCHAR(64),
-    llm_score DECIMAL(5,4),
-    source_score DECIMAL(5,4),
-    evidence_score DECIMAL(5,4),
-    feedback_score DECIMAL(5,4),
-    usage_score DECIMAL(5,4),
-    general_value_score DECIMAL(5,4),
-    privacy_risk DECIMAL(5,4) NOT NULL DEFAULT 0,
-    conflict_risk DECIMAL(5,4) NOT NULL DEFAULT 0,
-    stale_risk DECIMAL(5,4) NOT NULL DEFAULT 0,
-    applicable_version VARCHAR(128),
-    valid_from DATETIME(6),
-    valid_to DATETIME(6),
-    source_time DATETIME(6),
-    last_verified_at DATETIME(6),
-    usage_count INT NOT NULL DEFAULT 0,
-    positive_feedback_count INT NOT NULL DEFAULT 0,
-    negative_feedback_count INT NOT NULL DEFAULT 0,
-    tags_json TEXT,
-    previous_trust_level VARCHAR(32),
-    previous_status VARCHAR(32),
     version INT NOT NULL DEFAULT 1,
     hash VARCHAR(64) NOT NULL UNIQUE,
     approved_by VARCHAR(64),
@@ -60,11 +29,7 @@ CREATE TABLE knowledge_item (
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     expires_at DATETIME(6),
     INDEX idx_knowledge_retrieval(status, trust_level, scope_type),
-    INDEX idx_knowledge_scope_owner(tenant_id, project_id, user_id, conversation_id),
-    INDEX idx_knowledge_claim_hash(claim_hash),
-    INDEX idx_knowledge_promotion(status, trust_level, promotion_score),
-    INDEX idx_knowledge_validity(valid_to, expires_at),
-    INDEX idx_knowledge_document(document_id, page_number, chunk_index)
+    INDEX idx_knowledge_scope_owner(tenant_id, project_id, user_id, conversation_id)
 );
 
 CREATE TABLE rag_trace (
@@ -78,9 +43,9 @@ CREATE TABLE rag_trace (
     rewritten_query TEXT,
     final_prompt TEXT,
     answer TEXT,
-    max_vector_score DECIMAL(16,6),
-    avg_vector_score DECIMAL(16,6),
-    max_rerank_score DECIMAL(16,6),
+    max_vector_score DECIMAL(8,6),
+    avg_vector_score DECIMAL(8,6),
+    max_rerank_score DECIMAL(8,6),
     answer_confidence DECIMAL(5,4),
     possible_gap BOOLEAN NOT NULL DEFAULT FALSE,
     gap_score DECIMAL(5,4),
@@ -91,11 +56,7 @@ CREATE TABLE rag_trace (
     latency_ms BIGINT,
     status VARCHAR(32),
     error_message TEXT,
-    trace_type VARCHAR(32) NOT NULL DEFAULT 'NORMAL',
-    eval_run_id BIGINT,
-    eval_case_id BIGINT,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_rag_trace_eval(trace_type, eval_run_id, eval_case_id)
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 );
 
 CREATE TABLE retrieval_log (
@@ -104,12 +65,9 @@ CREATE TABLE retrieval_log (
     knowledge_id BIGINT,
     query TEXT,
     search_type VARCHAR(32),
-    vector_score DECIMAL(16,6),
-    keyword_score DECIMAL(16,6),
-    vector_rank INT,
-    keyword_rank INT,
-    rrf_score DECIMAL(8,6),
-    rerank_score DECIMAL(16,6),
+    vector_score DECIMAL(8,6),
+    keyword_score DECIMAL(8,6),
+    rerank_score DECIMAL(8,6),
     trust_score DECIMAL(8,6),
     final_score DECIMAL(8,6),
     trust_level VARCHAR(32),
@@ -144,278 +102,4 @@ CREATE TABLE review_task (
     reviewed_at DATETIME(6),
     INDEX idx_review_pending(status, created_at),
     CONSTRAINT fk_review_knowledge FOREIGN KEY (knowledge_id) REFERENCES knowledge_item(id)
-);
-
-CREATE TABLE promotion_task (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    knowledge_id BIGINT NOT NULL,
-    status VARCHAR(32) NOT NULL,
-    task_type VARCHAR(32) NOT NULL,
-    retry_count INT NOT NULL DEFAULT 0,
-    error_message TEXT,
-    started_at DATETIME(6),
-    finished_at DATETIME(6),
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_promotion_runnable(status, retry_count, created_at),
-    INDEX idx_promotion_knowledge(knowledge_id, task_type, status),
-    CONSTRAINT fk_promotion_knowledge FOREIGN KEY (knowledge_id) REFERENCES knowledge_item(id)
-);
-
-CREATE TABLE conflict_record (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    candidate_knowledge_id BIGINT NOT NULL,
-    existing_knowledge_id BIGINT NOT NULL,
-    conflict_type VARCHAR(32) NOT NULL,
-    confidence DECIMAL(5,4) NOT NULL,
-    reason TEXT,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_conflict_candidate(candidate_knowledge_id, created_at),
-    CONSTRAINT fk_conflict_candidate FOREIGN KEY (candidate_knowledge_id) REFERENCES knowledge_item(id),
-    CONSTRAINT fk_conflict_existing FOREIGN KEY (existing_knowledge_id) REFERENCES knowledge_item(id)
-);
-
-CREATE TABLE knowledge_lineage (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    knowledge_id BIGINT NOT NULL,
-    parent_knowledge_id BIGINT,
-    source_trace_id VARCHAR(64),
-    source_feedback_id BIGINT,
-    action VARCHAR(128) NOT NULL,
-    operator_type VARCHAR(32) NOT NULL,
-    operator_id VARCHAR(64),
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_lineage_knowledge(knowledge_id, created_at),
-    CONSTRAINT fk_lineage_knowledge FOREIGN KEY (knowledge_id) REFERENCES knowledge_item(id),
-    CONSTRAINT fk_lineage_parent FOREIGN KEY (parent_knowledge_id) REFERENCES knowledge_item(id)
-);
-
-CREATE TABLE index_sync_task (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    knowledge_id BIGINT NOT NULL,
-    target_index VARCHAR(32) NOT NULL,
-    operation VARCHAR(32) NOT NULL,
-    status VARCHAR(32) NOT NULL,
-    target_status VARCHAR(32),
-    retry_count INT NOT NULL DEFAULT 0,
-    error_message TEXT,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    started_at DATETIME(6),
-    finished_at DATETIME(6),
-    INDEX idx_index_sync_runnable(status, retry_count, created_at),
-    INDEX idx_index_sync_knowledge(knowledge_id, target_index, status),
-    CONSTRAINT fk_index_sync_knowledge FOREIGN KEY (knowledge_id) REFERENCES knowledge_item(id)
-);
-
-CREATE TABLE document_import_task (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    task_id VARCHAR(64) NOT NULL UNIQUE,
-    source_kind VARCHAR(32) NOT NULL,
-    status VARCHAR(32) NOT NULL,
-    original_filename VARCHAR(512),
-    content_type VARCHAR(255),
-    source_uri TEXT,
-    storage_path TEXT,
-    git_ref VARCHAR(255),
-    title VARCHAR(512),
-    source_type VARCHAR(64) NOT NULL,
-    trust_level VARCHAR(32) NOT NULL,
-    scope_type VARCHAR(32) NOT NULL,
-    user_id VARCHAR(64),
-    conversation_id VARCHAR(64),
-    project_id VARCHAR(64),
-    tenant_id VARCHAR(64),
-    total_documents INT NOT NULL DEFAULT 0,
-    total_sections INT NOT NULL DEFAULT 0,
-    imported_count INT NOT NULL DEFAULT 0,
-    duplicate_count INT NOT NULL DEFAULT 0,
-    failed_count INT NOT NULL DEFAULT 0,
-    retry_count INT NOT NULL DEFAULT 0,
-    error_message TEXT,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    started_at DATETIME(6),
-    finished_at DATETIME(6),
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_document_import_runnable(status, retry_count, created_at)
-);
-
-CREATE TABLE eval_dataset (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    tenant_id VARCHAR(64),
-    project_id VARCHAR(64),
-    created_by VARCHAR(64),
-    enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_eval_dataset_scope(tenant_id, project_id, enabled)
-);
-
-CREATE TABLE eval_case (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    dataset_id BIGINT NOT NULL,
-    question TEXT NOT NULL,
-    expected_answer TEXT,
-    tenant_id VARCHAR(64),
-    project_id VARCHAR(64),
-    user_id VARCHAR(64),
-    conversation_id VARCHAR(64),
-    tags TEXT,
-    difficulty VARCHAR(32),
-    enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_eval_case_dataset(dataset_id, enabled, id),
-    CONSTRAINT fk_eval_case_dataset FOREIGN KEY (dataset_id) REFERENCES eval_dataset(id)
-);
-
-CREATE TABLE eval_case_expected_knowledge (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    eval_case_id BIGINT NOT NULL,
-    knowledge_id BIGINT NOT NULL,
-    relevance_grade INT NOT NULL DEFAULT 1,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    UNIQUE KEY uk_eval_expected_case_knowledge(eval_case_id, knowledge_id),
-    CONSTRAINT fk_eval_expected_case FOREIGN KEY (eval_case_id) REFERENCES eval_case(id),
-    CONSTRAINT fk_eval_expected_knowledge FOREIGN KEY (knowledge_id) REFERENCES knowledge_item(id)
-);
-
-CREATE TABLE eval_run (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    dataset_id BIGINT NOT NULL,
-    run_name VARCHAR(255),
-    run_type VARCHAR(32) NOT NULL,
-    before_after_group VARCHAR(32) NOT NULL DEFAULT 'NORMAL',
-    status VARCHAR(32) NOT NULL,
-    total_count INT NOT NULL DEFAULT 0,
-    success_count INT NOT NULL DEFAULT 0,
-    failed_count INT NOT NULL DEFAULT 0,
-    engine_config_snapshot TEXT,
-    model_config_snapshot TEXT,
-    knowledge_snapshot_time DATETIME(6),
-    started_at DATETIME(6),
-    finished_at DATETIME(6),
-    error_message TEXT,
-    created_by VARCHAR(64),
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_eval_run_dataset(dataset_id, created_at),
-    INDEX idx_eval_run_status(status, created_at),
-    CONSTRAINT fk_eval_run_dataset FOREIGN KEY (dataset_id) REFERENCES eval_dataset(id)
-);
-
-CREATE TABLE eval_result (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    eval_run_id BIGINT NOT NULL,
-    eval_case_id BIGINT NOT NULL,
-    trace_id VARCHAR(64),
-    question TEXT NOT NULL,
-    expected_answer TEXT,
-    answer TEXT,
-    retrieved_count INT NOT NULL DEFAULT 0,
-    expected_knowledge_count INT NOT NULL DEFAULT 0,
-    recall_at_5 DECIMAL(8,6),
-    recall_at_10 DECIMAL(8,6),
-    precision_at_5 DECIMAL(8,6),
-    precision_at_10 DECIMAL(8,6),
-    mrr DECIMAL(8,6),
-    ndcg_at_5 DECIMAL(8,6),
-    ndcg_at_10 DECIMAL(8,6),
-    faithfulness DECIMAL(8,6),
-    answer_correctness DECIMAL(8,6),
-    answer_relevance DECIMAL(8,6),
-    hallucination_score DECIMAL(8,6),
-    prompt_tokens INT NOT NULL DEFAULT 0,
-    completion_tokens INT NOT NULL DEFAULT 0,
-    latency_ms BIGINT NOT NULL DEFAULT 0,
-    status VARCHAR(32) NOT NULL,
-    error_message TEXT,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_eval_result_run(eval_run_id, eval_case_id),
-    CONSTRAINT fk_eval_result_run FOREIGN KEY (eval_run_id) REFERENCES eval_run(id),
-    CONSTRAINT fk_eval_result_case FOREIGN KEY (eval_case_id) REFERENCES eval_case(id)
-);
-
-CREATE TABLE eval_judge_detail (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    eval_result_id BIGINT NOT NULL,
-    eval_run_id BIGINT NOT NULL,
-    eval_case_id BIGINT NOT NULL,
-    judge_type VARCHAR(64) NOT NULL,
-    model VARCHAR(128),
-    prompt TEXT,
-    raw_output TEXT,
-    score DECIMAL(8,6),
-    passed BOOLEAN,
-    reason TEXT,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_eval_judge_result(eval_result_id, judge_type),
-    CONSTRAINT fk_eval_judge_result FOREIGN KEY (eval_result_id) REFERENCES eval_result(id)
-);
-
-CREATE TABLE eval_report (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    eval_run_id BIGINT NOT NULL UNIQUE,
-    dataset_id BIGINT NOT NULL,
-    total_count INT NOT NULL DEFAULT 0,
-    success_count INT NOT NULL DEFAULT 0,
-    failed_count INT NOT NULL DEFAULT 0,
-    avg_recall_at_5 DECIMAL(8,6),
-    avg_recall_at_10 DECIMAL(8,6),
-    avg_precision_at_5 DECIMAL(8,6),
-    avg_precision_at_10 DECIMAL(8,6),
-    avg_mrr DECIMAL(8,6),
-    avg_ndcg_at_5 DECIMAL(8,6),
-    avg_ndcg_at_10 DECIMAL(8,6),
-    avg_faithfulness DECIMAL(8,6),
-    avg_answer_correctness DECIMAL(8,6),
-    avg_answer_relevance DECIMAL(8,6),
-    avg_hallucination_score DECIMAL(8,6),
-    avg_latency_ms DECIMAL(12,3),
-    p90_latency_ms DECIMAL(12,3),
-    summary_json TEXT,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_eval_report_run FOREIGN KEY (eval_run_id) REFERENCES eval_run(id)
-);
-
-CREATE TABLE eval_compare_report (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    before_run_id BIGINT NOT NULL,
-    after_run_id BIGINT NOT NULL,
-    recall_at_10_delta DECIMAL(8,6),
-    mrr_delta DECIMAL(8,6),
-    faithfulness_delta DECIMAL(8,6),
-    answer_correctness_delta DECIMAL(8,6),
-    hallucination_score_delta DECIMAL(8,6),
-    conclusion TEXT,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-);
-
-CREATE TABLE eval_governance_snapshot (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    tenant_id VARCHAR(64),
-    project_id VARCHAR(64),
-    snapshot_date DATE NOT NULL,
-    total_candidate_count BIGINT NOT NULL DEFAULT 0,
-    approved_candidate_count BIGINT NOT NULL DEFAULT 0,
-    rejected_candidate_count BIGINT NOT NULL DEFAULT 0,
-    candidate_approval_rate DECIMAL(8,6),
-    knowledge_reuse_rate DECIMAL(8,6),
-    contamination_rate DECIMAL(8,6),
-    privacy_leakage_rate DECIMAL(8,6),
-    gap_resolve_rate DECIMAL(8,6),
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_eval_governance_scope_date(tenant_id, project_id, snapshot_date)
-);
-
-CREATE TABLE privacy_event (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    trace_id VARCHAR(64),
-    knowledge_id BIGINT,
-    tenant_id VARCHAR(64),
-    project_id VARCHAR(64),
-    event_type VARCHAR(64) NOT NULL,
-    risk_level VARCHAR(32),
-    description TEXT,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_privacy_event_scope_time(tenant_id, project_id, created_at)
 );

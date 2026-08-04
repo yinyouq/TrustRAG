@@ -106,6 +106,11 @@ pre { max-height: 280px; overflow: auto; padding: 14px; border-radius: 10px; bac
 .delta-good { color: #287a50; }
 .delta-bad { color: var(--danger); }
 .governance-metrics { grid-template-columns: repeat(5, 1fr); margin-top: 22px; }
+.memory-metrics { grid-template-columns: repeat(4, 1fr); margin-top: 18px; }
+.memory-status { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px 14px; padding: 15px 18px; }
+.memory-status small { grid-column: 2; color: var(--muted); }
+.memory-status--unavailable, .memory-status--partial { border-color: #e5cdb5; background: #fffaf3; }
+.memory-status--disabled { background: #f7f7f5; }
 .knowledge-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 .compact-heading { align-items: center; }
 .compact-heading h2 { margin-top: 4px; }
@@ -121,7 +126,7 @@ pre { max-height: 280px; overflow: auto; padding: 14px; border-radius: 10px; bac
   .app-header { grid-template-columns: 1fr auto; }
   .main-nav { grid-column: 1 / -1; order: 3; padding-bottom: 10px; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
-  .report-metrics, .governance-metrics { grid-template-columns: repeat(2, 1fr); }
+  .report-metrics, .governance-metrics, .memory-metrics { grid-template-columns: repeat(2, 1fr); }
   .compare-grid { grid-template-columns: 1fr; }
   .knowledge-grid { grid-template-columns: 1fr; }
   .knowledge-reference-layout { grid-template-columns: 1fr; }

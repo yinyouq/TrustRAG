@@ -3,6 +3,7 @@
  */
 import { createEvaluationApi } from './evaluation'
 import { createHttpClient } from './http'
+import { createInfrastructureApi } from './infrastructure'
 import { createKnowledgeApi } from './knowledge'
 
 const defaultBaseUrl = import.meta.env.VITE_API_BASE_URL || '/trust-rag/admin/eval'
@@ -20,3 +21,4 @@ export const adminHttpClient = createHttpClient({
 
 export const evaluationApi = createEvaluationApi(httpClient)
 export const knowledgeApi = createKnowledgeApi(adminHttpClient)
+export const infrastructureApi = createInfrastructureApi(adminHttpClient)

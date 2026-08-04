@@ -13,6 +13,29 @@ let nextDocumentTaskId = 2
 let nextPromotionTaskId = 600
 
 export const handlers = [
+  http.get('*/trust-rag/admin/infrastructure/memory', ({ request }) => {
+    const windowMinutes = Number(new URL(request.url).searchParams.get('windowMinutes') ?? 60)
+    const now = Date.now()
+    const milvus = 768 * 1024 * 1024
+    const opensearch = 512 * 1024 * 1024
+    return HttpResponse.json({
+      status: 'AVAILABLE',
+      message: '仅统计 Milvus 与 OpenSearch 容器；不包含宿主 Java、MySQL、etcd、MinIO 或模型服务。',
+      sampledAt: new Date(now).toISOString(),
+      windowMinutes,
+      workingSetBytes: milvus + opensearch,
+      rssBytes: 1100 * 1024 * 1024,
+      peakWorkingSetBytes: 1400 * 1024 * 1024,
+      services: [
+        { service: 'milvus', displayName: 'Milvus', available: true, workingSetBytes: milvus, rssBytes: 650 * 1024 * 1024, peakWorkingSetBytes: 830 * 1024 * 1024 },
+        { service: 'opensearch', displayName: 'OpenSearch', available: true, workingSetBytes: opensearch, rssBytes: 450 * 1024 * 1024, peakWorkingSetBytes: 570 * 1024 * 1024 },
+      ],
+      workingSetTrend: Array.from({ length: 8 }, (_, index) => ({
+        timestamp: new Date(now - (7 - index) * 60_000).toISOString(),
+        workingSetBytes: milvus + opensearch - (7 - index) * 12 * 1024 * 1024,
+      })),
+    })
+  }),
   http.post('*/api/documents/upload', async ({ request }) => {
     const body = await request.formData()
     const file = body.get('file') as File | null

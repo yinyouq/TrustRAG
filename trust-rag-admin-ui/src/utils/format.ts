@@ -30,6 +30,22 @@ export function formatDuration(value: number | null | undefined): string {
   return `${minutes}m ${seconds}s`
 }
 
+/** 将容器内存字节数格式化为便于比较的二进制单位。 */
+export function formatBytes(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '--'
+  }
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+  let amount = Math.max(0, value)
+  let unitIndex = 0
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024
+    unitIndex += 1
+  }
+  const digits = unitIndex === 0 ? 0 : amount >= 100 ? 0 : 1
+  return `${amount.toFixed(digits)} ${units[unitIndex]}`
+}
+
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) {
     return '--'

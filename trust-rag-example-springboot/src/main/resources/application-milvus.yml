@@ -22,6 +22,12 @@ trust-rag:
     collection: trust_rag_knowledge_vector
     dimension: 64
     metric-type: COSINE
+    # 可选：AUTOINDEX（默认，由 Milvus 选择）、FLAT（精确检索，适合小数据集）、
+    # IVF_FLAT / IVF_SQ8 / IVF_PQ（倒排索引，适合较大数据集）、
+    # HNSW / HNSW_SQ / HNSW_PQ / HNSW_PRQ（低延迟高召回、内存占用较高）、
+    # DISKANN（超大规模、以磁盘换内存）、SCANN、IVF_RABITQ。
+    # 改此项只影响新建 Collection；已有 Collection 需显式重建索引后才会改变。
+    index-type: AUTOINDEX
     vector-top-k: 30
     auto-create-collection: true
   opensearch:
@@ -31,6 +37,11 @@ trust-rag:
     index-name: trust_rag_knowledge_keyword
     keyword-top-k: 30
     auto-create-index: true
+  infrastructure-memory:
+    enabled: true
+    prometheus-url: http://localhost:9090
+    default-window-minutes: 60
+    max-window-minutes: 1440
   retrieval:
     mode: hybrid-rrf
     prompt-top-k: 5

@@ -260,7 +260,7 @@ docker compose up -d
 docker compose ps
 ```
 
-Compose 只启动 MySQL、Milvus、OpenSearch、etcd 和 MinIO，**不会启动 TrustRAG 本身**。TrustRAG 是框架，由宿主 Java 应用通过 Starter 引入。
+Compose 会启动 MySQL、Milvus、OpenSearch、etcd、MinIO，以及用于容器内存采集的 cAdvisor 和 Prometheus，**不会启动 TrustRAG 本身**。TrustRAG 是框架，由宿主 Java 应用通过 Starter 引入。
 
 默认本地连接：
 
@@ -269,12 +269,47 @@ Compose 只启动 MySQL、Milvus、OpenSearch、etcd 和 MinIO，**不会启动 
 | MySQL | `localhost:3306` | 知识、Trace、反馈、治理任务、评估数据 |
 | Milvus | `http://localhost:19530` | 向量存储与召回 |
 | OpenSearch | `http://localhost:9200` | BM25 关键词检索 |
+| Prometheus | `http://localhost:9090` | Milvus + OpenSearch 容器内存指标 |
+| cAdvisor | `http://localhost:8081` | Docker 容器资源采集 |
 
 停止基础设施：
 
 ```powershell
 docker compose down
 ```
+
+### 基础设施运行内存
+
+评估管理台的“基础设施运行内存”页面只聚合 Milvus 和 OpenSearch 的容器
+Working Set、RSS 及所选时间窗口内的 Working Set 峰值；宿主 Java、MySQL、
+etcd、MinIO、Embedding 与 LLM 服务均不计入该指标。Compose 已提供 cAdvisor
+采集和 Prometheus 存储，使用 `milvus` profile 启动示例应用时会自动读取
+`http://localhost:9090`。
+
+接入其他宿主项目时，按部署环境配置 Prometheus 地址即可：
+
+```yaml
+trust-rag:
+  admin-api:
+    enabled: true
+  infrastructure-memory:
+    enabled: true
+    prometheus-url: http://prometheus:9090 # 宿主进程在本机时使用 http://localhost:9090
+    default-window-minutes: 60
+    max-window-minutes: 1440
+```
+
+默认按 cAdvisor 的 Docker Compose 标签
+`container_label_com_docker_compose_service` 过滤名称为 `milvus` 和
+`opensearch` 的容器。非 Compose 或 Kubernetes 部署可用
+`service-label`、`milvus-service`、`opensearch-service` 覆盖此约定。
+
+### Flyway 迁移兼容性
+
+TrustRAG 的版本化迁移不可改写。已发布的 `V1__trust_rag_schema.sql`
+保持为初始基线，后续结构演进统一放在 `V2__...` 及更高版本中。升级已有
+TrustRAG 数据库时，不要执行 `flyway repair` 来绕过校验和；应升级到包含对应
+前向迁移的 TrustRAG 版本，让 Flyway 自动继续执行新的版本。
 
 ## 构建并安装 Starter
 
@@ -372,6 +407,11 @@ trust-rag:
     collection: trust_rag_knowledge_vector
     dimension: 1536
     metric-type: COSINE
+    # AUTOINDEX（默认）；可选 FLAT、IVF_FLAT、IVF_SQ8、IVF_PQ、
+    # HNSW、HNSW_SQ、HNSW_PQ、HNSW_PRQ、DISKANN、SCANN、IVF_RABITQ。
+    # FLAT 适合精确基线与小数据集；IVF 系列适合较大数据集；HNSW 系列以更多内存换低延迟；
+    # DISKANN 适合超大规模数据。改此项仅影响新建 Collection，已有 Collection 需重建索引。
+    index-type: AUTOINDEX
     vector-top-k: 30
     auto-create-collection: true
 

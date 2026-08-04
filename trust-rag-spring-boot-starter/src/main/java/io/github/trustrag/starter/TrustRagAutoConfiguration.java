@@ -467,6 +467,7 @@ public class TrustRagAutoConfiguration {
                         milvus.getCollection(),
                         milvus.getDimension(),
                         milvus.getMetricType(),
+                        milvus.getIndexType(),
                         milvus.isAutoCreateCollection()),
                 new MilvusFilterBuilder());
         try {

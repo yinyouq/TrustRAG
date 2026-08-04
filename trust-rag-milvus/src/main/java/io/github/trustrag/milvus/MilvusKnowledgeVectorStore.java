@@ -185,7 +185,7 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
         IndexParam vectorIndex = IndexParam.builder()
                 .fieldName(VECTOR_FIELD)
                 .indexName("idx_trust_rag_embedding")
-                .indexType(IndexParam.IndexType.AUTOINDEX)
+                .indexType(indexType())
                 .metricType(metricType())
                 .build();
         client.createCollection(CreateCollectionReq.builder()
@@ -245,6 +245,19 @@ public final class MilvusKnowledgeVectorStore implements KnowledgeVectorStore, A
             return IndexParam.MetricType.valueOf(settings.metricType().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("Unsupported Milvus metric type: " + settings.metricType(), exception);
+        }
+    }
+
+    private IndexParam.IndexType indexType() {
+        try {
+            return IndexParam.IndexType.valueOf(settings.indexType().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    "Unsupported Milvus index type: " + settings.indexType()
+                            + ". Use AUTOINDEX, FLAT, IVF_FLAT, IVF_SQ8, IVF_PQ, "
+                            + "HNSW, HNSW_SQ, HNSW_PQ, HNSW_PRQ, DISKANN, SCANN, "
+                            + "IVF_RABITQ, or another type supported by this Milvus deployment.",
+                    exception);
         }
     }
 

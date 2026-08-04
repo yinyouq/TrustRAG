@@ -2,7 +2,7 @@
  * 验证 format 的前端行为和边界场景。
  */
 import { describe, expect, it } from 'vitest'
-import { formatDuration, formatPercent, formatSignedPercent } from './format'
+import { formatBytes, formatDuration, formatPercent, formatSignedPercent } from './format'
 
 describe('metric formatters', () => {
   it('distinguishes missing metrics from zero', () => {
@@ -23,5 +23,10 @@ describe('metric formatters', () => {
     expect(formatSignedPercent(0.042)).toBe('+4.2%')
     expect(formatSignedPercent(-0.03)).toBe('-3.0%')
     expect(formatSignedPercent(null)).toBe('--')
+  })
+
+  it('formats bytes using binary units', () => {
+    expect(formatBytes(1280 * 1024 * 1024)).toBe('1.3 GiB')
+    expect(formatBytes(null)).toBe('--')
   })
 })

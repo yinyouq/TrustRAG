@@ -190,6 +190,7 @@ public class TrustRagProperties {
         private String collection = "trust_rag_knowledge_vector";
         private int dimension = 1536;
         private String metricType = "COSINE";
+        private String indexType = "AUTOINDEX";
         private boolean autoCreateCollection = true;
         private int vectorTopK = 30;
         private long connectTimeoutMs = 10000;
@@ -265,6 +266,14 @@ public class TrustRagProperties {
 
         public void setMetricType(String metricType) {
             this.metricType = metricType;
+        }
+
+        public String getIndexType() {
+            return indexType;
+        }
+
+        public void setIndexType(String indexType) {
+            this.indexType = indexType;
         }
 
         public boolean isAutoCreateCollection() {
