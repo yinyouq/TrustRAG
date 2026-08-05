@@ -56,6 +56,7 @@ public final class DefaultGenerationJudgeService implements GenerationJudgeServi
     private JudgeScore score(EvalRun run, EvalCase evalCase, RagAnswer answer, JudgeType judgeType) {
         String prompt = prompt(judgeType, evalCase, answer);
         int attempts = Math.max(1, options.maxRetry() + 1);
+        long startedNanos = System.nanoTime();
         RuntimeException lastError = null;
         String lastRaw = null;
         for (int attempt = 0; attempt < attempts; attempt++) {
@@ -66,13 +67,16 @@ public final class DefaultGenerationJudgeService implements GenerationJudgeServi
                 lastRaw = raw;
                 ParsedJudge parsed = parse(raw);
                 return new JudgeScore(
-                        judgeType, prompt, raw, parsed.score(), parsed.passed(), parsed.reason());
+                        judgeType, prompt, raw, parsed.score(), parsed.passed(), parsed.reason(),
+                        elapsedMs(startedNanos), attempt);
             } catch (RuntimeException exception) {
                 lastError = exception;
             }
         }
         String reason = lastError == null ? "judge failed" : lastError.getMessage();
-        return new JudgeScore(judgeType, prompt, lastRaw, null, false, reason);
+        return new JudgeScore(
+                judgeType, prompt, lastRaw, null, false, reason,
+                elapsedMs(startedNanos), attempts - 1);
     }
 
     private ParsedJudge parse(String raw) {
@@ -168,6 +172,10 @@ public final class DefaultGenerationJudgeService implements GenerationJudgeServi
         return Math.max(0.0, Math.min(1.0, value));
     }
 
+    private long elapsedMs(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000;
+    }
+
     private record ParsedJudge(Double score, Boolean passed, String reason) {
     }
 
@@ -188,7 +196,9 @@ public final class DefaultGenerationJudgeService implements GenerationJudgeServi
             String rawOutput,
             Double score,
             Boolean passed,
-            String reason) {
+            String reason,
+            long judgeLatencyMs,
+            int retryCount) {
 
         EvalJudgeDetail toDetail(
                 EvalRun run,
@@ -207,6 +217,8 @@ public final class DefaultGenerationJudgeService implements GenerationJudgeServi
                     score,
                     passed,
                     reason,
+                    judgeLatencyMs,
+                    retryCount,
                     now);
         }
     }

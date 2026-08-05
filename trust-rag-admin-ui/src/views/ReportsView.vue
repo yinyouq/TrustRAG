@@ -20,6 +20,17 @@ const results = ref<EvalResult[]>([])
 const selectedResult = ref<EvalResult | null>(null)
 const detailVisible = ref(false)
 const loading = ref(false)
+const latencyDetailsExpanded = ref(false)
+
+const averageLatencyValue = computed(() => {
+  if (!report.value) return '--'
+  return `${formatDuration(report.value.avgLatencyWithJudgeMs ?? report.value.avgLatencyMs)} / ${formatDuration(report.value.avgLatencyMs)}`
+})
+
+const p90LatencyValue = computed(() => {
+  if (!report.value) return '--'
+  return formatDuration(report.value.p90LatencyWithJudgeMs ?? report.value.p90LatencyMs)
+})
 
 const chartOption = computed<EChartsOption>(() => {
   if (!report.value) return {}
@@ -85,9 +96,30 @@ function openDetail(result: EvalResult) {
         <MetricCard label="Answer Correctness" :value="formatPercent(report.avgAnswerCorrectness)" />
         <MetricCard label="Answer Relevance" :value="formatPercent(report.avgAnswerRelevance)" />
         <MetricCard label="幻觉率" :value="formatPercent(report.avgHallucinationScore)" :tone="report.avgHallucinationScore !== null && report.avgHallucinationScore > .2 ? 'danger' : 'normal'" />
-        <MetricCard label="平均耗时" :value="formatDuration(report.avgLatencyMs)" />
-        <MetricCard label="P90 耗时" :value="formatDuration(report.p90LatencyMs)" />
+        <MetricCard label="平均耗时" :value="averageLatencyValue" note="含 Judge / 不含 Judge" />
+        <MetricCard
+          label="P90 耗时"
+          :value="p90LatencyValue"
+          note="点击查看全部"
+          clickable
+          :expanded="latencyDetailsExpanded"
+          @click="latencyDetailsExpanded = !latencyDetailsExpanded"
+        />
       </div>
+      <section v-if="latencyDetailsExpanded" class="content-panel latency-breakdown">
+        <div class="section-heading">
+          <div><span class="eyebrow">LATENCY</span><h2>耗时分位明细</h2></div>
+          <span class="quiet">含 Judge = RAG 问答 + 三项 Judge</span>
+        </div>
+        <div class="latency-breakdown-grid">
+          <div><span>P90（含 Judge）</span><strong>{{ formatDuration(report.p90LatencyWithJudgeMs ?? report.p90LatencyMs) }}</strong></div>
+          <div><span>P95（含 Judge）</span><strong>{{ formatDuration(report.p95LatencyWithJudgeMs) }}</strong></div>
+          <div><span>P99（含 Judge）</span><strong>{{ formatDuration(report.p99LatencyWithJudgeMs) }}</strong></div>
+          <div><span>P90（不含 Judge）</span><strong>{{ formatDuration(report.p90LatencyMs) }}</strong></div>
+          <div><span>P95（不含 Judge）</span><strong>{{ formatDuration(report.p95LatencyMs) }}</strong></div>
+          <div><span>P99（不含 Judge）</span><strong>{{ formatDuration(report.p99LatencyMs) }}</strong></div>
+        </div>
+      </section>
       <div class="content-panel block-gap"><div class="section-heading"><div><span class="eyebrow">METRICS</span><h2>指标分布</h2></div><span class="quiet">成功 {{ report.successCount }} / {{ report.totalCount }}</span></div><MetricChart :option="chartOption" /></div>
       <div class="content-panel block-gap table-panel">
         <div class="section-heading"><div><span class="eyebrow">CASE DETAILS</span><h2>逐题明细</h2></div><span class="quiet">点击行查看回答与 Judge 原始输出</span></div>

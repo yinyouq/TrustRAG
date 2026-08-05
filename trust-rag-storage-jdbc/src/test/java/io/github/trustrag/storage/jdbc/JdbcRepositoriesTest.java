@@ -178,7 +178,7 @@ class JdbcRepositoriesTest {
         EvalReport report = evaluationRepository.saveReport(new EvalReport(
                 null, run.id(), dataset.id(), 1, 1, 0, 1.0, 1.0,
                 0.2, 0.1, 1.0, 1.0, 1.0, null, null, null,
-                null, 8.0, 8.0, "{}", now));
+                null, 8.0, 12.0, 8.0, 12.0, 8.0, 12.0, 8.0, 12.0, "{}", now));
 
         assertThat(evaluationRepository.findDataset(dataset.id())).contains(dataset);
         assertThat(evaluationRepository.listCases(dataset.id(), true, 10, 0)).containsExactly(evalCase);

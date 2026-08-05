@@ -371,10 +371,12 @@ public class JdbcEvaluationRepository implements EvaluationRepository {
         jdbc.update("""
                 INSERT INTO eval_judge_detail (
                     eval_result_id, eval_run_id, eval_case_id, judge_type, model,
-                    prompt, raw_output, score, passed, reason, created_at
+                    prompt, raw_output, score, passed, reason, judge_latency_ms,
+                    retry_count, created_at
                 ) VALUES (
                     :evalResultId, :evalRunId, :evalCaseId, :judgeType, :model,
-                    :prompt, :rawOutput, :score, :passed, :reason, :createdAt
+                    :prompt, :rawOutput, :score, :passed, :reason, :judgeLatencyMs,
+                    :retryCount, :createdAt
                 )
                 """, judgeParameters(detail), keys, new String[]{"id"});
         return detail.withId(key(keys, "eval judge detail"));
@@ -403,14 +405,18 @@ public class JdbcEvaluationRepository implements EvaluationRepository {
                     avg_recall_at_5, avg_recall_at_10, avg_precision_at_5,
                     avg_precision_at_10, avg_mrr, avg_ndcg_at_5, avg_ndcg_at_10,
                     avg_faithfulness, avg_answer_correctness, avg_answer_relevance,
-                    avg_hallucination_score, avg_latency_ms, p90_latency_ms,
+                    avg_hallucination_score, avg_latency_ms, avg_latency_with_judge_ms,
+                    p90_latency_ms, p90_latency_with_judge_ms, p95_latency_ms,
+                    p95_latency_with_judge_ms, p99_latency_ms, p99_latency_with_judge_ms,
                     summary_json, created_at
                 ) VALUES (
                     :evalRunId, :datasetId, :totalCount, :successCount, :failedCount,
                     :avgRecallAt5, :avgRecallAt10, :avgPrecisionAt5,
                     :avgPrecisionAt10, :avgMrr, :avgNdcgAt5, :avgNdcgAt10,
                     :avgFaithfulness, :avgAnswerCorrectness, :avgAnswerRelevance,
-                    :avgHallucinationScore, :avgLatencyMs, :p90LatencyMs,
+                    :avgHallucinationScore, :avgLatencyMs, :avgLatencyWithJudgeMs,
+                    :p90LatencyMs, :p90LatencyWithJudgeMs, :p95LatencyMs,
+                    :p95LatencyWithJudgeMs, :p99LatencyMs, :p99LatencyWithJudgeMs,
                     :summaryJson, :createdAt
                 )
                 """, reportParameters(report), keys, new String[]{"id"});
@@ -663,6 +669,8 @@ public class JdbcEvaluationRepository implements EvaluationRepository {
                 .addValue("score", detail.score())
                 .addValue("passed", detail.passed())
                 .addValue("reason", detail.reason())
+                .addValue("judgeLatencyMs", detail.judgeLatencyMs())
+                .addValue("retryCount", detail.retryCount())
                 .addValue("createdAt", timestamp(detail.createdAt()));
     }
 
@@ -685,7 +693,13 @@ public class JdbcEvaluationRepository implements EvaluationRepository {
                 .addValue("avgAnswerRelevance", report.avgAnswerRelevance())
                 .addValue("avgHallucinationScore", report.avgHallucinationScore())
                 .addValue("avgLatencyMs", report.avgLatencyMs())
+                .addValue("avgLatencyWithJudgeMs", report.avgLatencyWithJudgeMs())
                 .addValue("p90LatencyMs", report.p90LatencyMs())
+                .addValue("p90LatencyWithJudgeMs", report.p90LatencyWithJudgeMs())
+                .addValue("p95LatencyMs", report.p95LatencyMs())
+                .addValue("p95LatencyWithJudgeMs", report.p95LatencyWithJudgeMs())
+                .addValue("p99LatencyMs", report.p99LatencyMs())
+                .addValue("p99LatencyWithJudgeMs", report.p99LatencyWithJudgeMs())
                 .addValue("summaryJson", report.summaryJson())
                 .addValue("createdAt", timestamp(report.createdAt()));
     }
@@ -822,6 +836,8 @@ public class JdbcEvaluationRepository implements EvaluationRepository {
                 nullableDouble(rs, "score"),
                 nullableBoolean(rs, "passed"),
                 rs.getString("reason"),
+                rs.getLong("judge_latency_ms"),
+                rs.getInt("retry_count"),
                 instant(rs, "created_at"));
     }
 
@@ -845,7 +861,13 @@ public class JdbcEvaluationRepository implements EvaluationRepository {
                 nullableDouble(rs, "avg_answer_relevance"),
                 nullableDouble(rs, "avg_hallucination_score"),
                 nullableDouble(rs, "avg_latency_ms"),
+                nullableDouble(rs, "avg_latency_with_judge_ms"),
                 nullableDouble(rs, "p90_latency_ms"),
+                nullableDouble(rs, "p90_latency_with_judge_ms"),
+                nullableDouble(rs, "p95_latency_ms"),
+                nullableDouble(rs, "p95_latency_with_judge_ms"),
+                nullableDouble(rs, "p99_latency_ms"),
+                nullableDouble(rs, "p99_latency_with_judge_ms"),
                 rs.getString("summary_json"),
                 instant(rs, "created_at"));
     }

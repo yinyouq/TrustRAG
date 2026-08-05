@@ -40,7 +40,7 @@ export const mockRuns: EvalRun[] = [
 ]
 
 function report(runId: number, datasetId: number, lift = 0): EvalReport {
-  return { id: runId, evalRunId: runId, datasetId, totalCount: datasetId === 1 ? 24 : 20, successCount: datasetId === 1 ? 23 : 19, failedCount: 1, avgRecallAt5: .78 + lift, avgRecallAt10: .864 + lift, avgPrecisionAt5: .61 + lift, avgPrecisionAt10: .42 + lift, avgMrr: .81 + lift, avgNdcgAt5: .8 + lift, avgNdcgAt10: .84 + lift, avgFaithfulness: .912 + lift, avgAnswerCorrectness: .86 + lift, avgAnswerRelevance: .93 + lift, avgHallucinationScore: .088 - lift, avgLatencyMs: 1250, p90LatencyMs: 1950, summaryJson: '{}', createdAt: now }
+  return { id: runId, evalRunId: runId, datasetId, totalCount: datasetId === 1 ? 24 : 20, successCount: datasetId === 1 ? 23 : 19, failedCount: 1, avgRecallAt5: .78 + lift, avgRecallAt10: .864 + lift, avgPrecisionAt5: .61 + lift, avgPrecisionAt10: .42 + lift, avgMrr: .81 + lift, avgNdcgAt5: .8 + lift, avgNdcgAt10: .84 + lift, avgFaithfulness: .912 + lift, avgAnswerCorrectness: .86 + lift, avgAnswerRelevance: .93 + lift, avgHallucinationScore: .088 - lift, avgLatencyMs: 1250, avgLatencyWithJudgeMs: 4800, p90LatencyMs: 1950, p90LatencyWithJudgeMs: 6200, p95LatencyMs: 2200, p95LatencyWithJudgeMs: 7100, p99LatencyMs: 2600, p99LatencyWithJudgeMs: 8600, summaryJson: '{}', createdAt: now }
 }
 
 export const mockReports: Record<number, EvalReport> = {
@@ -55,8 +55,8 @@ export const mockResults: EvalResult[] = [
 ]
 
 export const mockJudgeDetails: EvalJudgeDetail[] = [
-  { id: 1, evalResultId: 1001, evalRunId: 100, evalCaseId: 11, judgeType: 'FAITHFULNESS', model: 'qwen-plus', prompt: 'Evaluate whether the answer is supported by context.', rawOutput: '{"score":0.94,"pass":true,"reason":"All claims are supported"}', score: .94, passed: true, reason: '所有关键结论均有上下文支持', createdAt: now },
-  { id: 2, evalResultId: 1001, evalRunId: 100, evalCaseId: 11, judgeType: 'ANSWER_CORRECTNESS', model: 'qwen-plus', prompt: 'Compare actual answer with expected answer.', rawOutput: '{"score":0.90,"pass":true,"reason":"Core points covered"}', score: .9, passed: true, reason: '覆盖标准答案核心要点', createdAt: now },
+  { id: 1, evalResultId: 1001, evalRunId: 100, evalCaseId: 11, judgeType: 'FAITHFULNESS', model: 'qwen-plus', prompt: 'Evaluate whether the answer is supported by context.', rawOutput: '{"score":0.94,"pass":true,"reason":"All claims are supported"}', score: .94, passed: true, reason: '所有关键结论均有上下文支持', judgeLatencyMs: 1320, retryCount: 0, createdAt: now },
+  { id: 2, evalResultId: 1001, evalRunId: 100, evalCaseId: 11, judgeType: 'ANSWER_CORRECTNESS', model: 'qwen-plus', prompt: 'Compare actual answer with expected answer.', rawOutput: '{"score":0.90,"pass":true,"reason":"Core points covered"}', score: .9, passed: true, reason: '覆盖标准答案核心要点', judgeLatencyMs: 1840, retryCount: 1, createdAt: now },
 ]
 
 export const mockGovernance: EvalGovernanceSnapshot[] = Array.from({ length: 7 }, (_, index) => ({

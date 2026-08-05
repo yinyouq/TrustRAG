@@ -37,6 +37,10 @@ class DefaultGenerationJudgeServiceTest {
         assertThat(result.faithfulness()).isEqualTo(0.8);
         assertThat(result.answerCorrectness()).isEqualTo(0.7);
         assertThat(result.answerRelevance()).isEqualTo(0.9);
+        assertThat(result.details().get(0).retryCount()).isEqualTo(1);
+        assertThat(result.details().get(1).retryCount()).isZero();
+        assertThat(result.details()).allSatisfy(detail ->
+                assertThat(detail.judgeLatencyMs()).isGreaterThanOrEqualTo(0));
     }
 
     @Test
@@ -53,6 +57,7 @@ class DefaultGenerationJudgeServiceTest {
         assertThat(result.details().get(0).rawOutput()).isEqualTo("bad-2");
         assertThat(result.details().get(0).passed()).isFalse();
         assertThat(result.details().get(0).reason()).contains("valid JSON");
+        assertThat(result.details()).allSatisfy(detail -> assertThat(detail.retryCount()).isEqualTo(1));
     }
 
     private DefaultGenerationJudgeService service(LlmClient client, int maxRetry) {

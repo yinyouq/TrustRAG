@@ -17,17 +17,19 @@ public record EvalJudgeDetail(
         Double score,
         Boolean passed,
         String reason,
+        long judgeLatencyMs,
+        int retryCount,
         Instant createdAt) {
 
     public EvalJudgeDetail withResultId(Long value) {
         return new EvalJudgeDetail(
                 id, value, evalRunId, evalCaseId, judgeType, model, prompt,
-                rawOutput, score, passed, reason, createdAt);
+                rawOutput, score, passed, reason, judgeLatencyMs, retryCount, createdAt);
     }
 
     public EvalJudgeDetail withId(Long value) {
         return new EvalJudgeDetail(
                 value, evalResultId, evalRunId, evalCaseId, judgeType, model, prompt,
-                rawOutput, score, passed, reason, createdAt);
+                rawOutput, score, passed, reason, judgeLatencyMs, retryCount, createdAt);
     }
 }

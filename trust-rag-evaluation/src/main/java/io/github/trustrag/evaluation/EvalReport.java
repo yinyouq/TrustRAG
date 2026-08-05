@@ -24,7 +24,13 @@ public record EvalReport(
         Double avgAnswerRelevance,
         Double avgHallucinationScore,
         Double avgLatencyMs,
+        Double avgLatencyWithJudgeMs,
         Double p90LatencyMs,
+        Double p90LatencyWithJudgeMs,
+        Double p95LatencyMs,
+        Double p95LatencyWithJudgeMs,
+        Double p99LatencyMs,
+        Double p99LatencyWithJudgeMs,
         String summaryJson,
         Instant createdAt) {
 
@@ -33,7 +39,8 @@ public record EvalReport(
                 value, evalRunId, datasetId, totalCount, successCount, failedCount,
                 avgRecallAt5, avgRecallAt10, avgPrecisionAt5, avgPrecisionAt10,
                 avgMrr, avgNdcgAt5, avgNdcgAt10, avgFaithfulness, avgAnswerCorrectness,
-                avgAnswerRelevance, avgHallucinationScore, avgLatencyMs, p90LatencyMs,
-                summaryJson, createdAt);
+                avgAnswerRelevance, avgHallucinationScore, avgLatencyMs, avgLatencyWithJudgeMs,
+                p90LatencyMs, p90LatencyWithJudgeMs, p95LatencyMs, p95LatencyWithJudgeMs,
+                p99LatencyMs, p99LatencyWithJudgeMs, summaryJson, createdAt);
     }
 }

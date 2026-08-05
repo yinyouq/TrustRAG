@@ -148,6 +148,8 @@ export interface EvalJudgeDetail {
   score: number | null
   passed: boolean | null
   reason: string | null
+  judgeLatencyMs: number
+  retryCount: number
   createdAt: string
 }
 
@@ -170,7 +172,13 @@ export interface EvalReport {
   avgAnswerRelevance: number | null
   avgHallucinationScore: number | null
   avgLatencyMs: number | null
+  avgLatencyWithJudgeMs: number | null
   p90LatencyMs: number | null
+  p90LatencyWithJudgeMs: number | null
+  p95LatencyMs: number | null
+  p95LatencyWithJudgeMs: number | null
+  p99LatencyMs: number | null
+  p99LatencyWithJudgeMs: number | null
   summaryJson: string | null
   createdAt: string
 }

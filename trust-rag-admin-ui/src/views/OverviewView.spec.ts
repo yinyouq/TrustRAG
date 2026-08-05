@@ -60,7 +60,13 @@ describe('OverviewView', () => {
       avgAnswerRelevance: null,
       avgHallucinationScore: null,
       avgLatencyMs: 1250,
+      avgLatencyWithJudgeMs: 1250,
       p90LatencyMs: 1900,
+      p90LatencyWithJudgeMs: 1900,
+      p95LatencyMs: 1900,
+      p95LatencyWithJudgeMs: 1900,
+      p99LatencyMs: 1900,
+      p99LatencyWithJudgeMs: 1900,
       summaryJson: '{}',
       createdAt: '2026-06-20T10:01:00Z',
     })

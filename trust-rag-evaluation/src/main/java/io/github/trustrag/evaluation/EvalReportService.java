@@ -33,6 +33,8 @@ public final class EvalReportService {
         List<EvalResult> results = repository.listResults(runId, Integer.MAX_VALUE, 0);
         int success = (int) results.stream().filter(result -> result.status() == EvalResultStatus.SUCCEEDED).count();
         int failed = results.size() - success;
+        List<Long> ragLatencies = successfulLatencies(results);
+        List<Long> endToEndLatencies = latenciesWithJudge(results);
         EvalReport report = new EvalReport(
                 null,
                 runId,
@@ -51,8 +53,14 @@ public final class EvalReportService {
                 average(results.stream().map(EvalResult::answerCorrectness).toList()),
                 average(results.stream().map(EvalResult::answerRelevance).toList()),
                 average(results.stream().map(EvalResult::hallucinationScore).toList()),
-                averageLatency(results),
-                percentileLatency(results, 0.90),
+                averageLatency(ragLatencies),
+                averageLatency(endToEndLatencies),
+                percentileLatency(ragLatencies, 0.90),
+                percentileLatency(endToEndLatencies, 0.90),
+                percentileLatency(ragLatencies, 0.95),
+                percentileLatency(endToEndLatencies, 0.95),
+                percentileLatency(ragLatencies, 0.99),
+                percentileLatency(endToEndLatencies, 0.99),
                 summary(results),
                 clock.instant());
         return repository.saveReport(report);
@@ -116,19 +124,38 @@ public final class EvalReportService {
         return average.isPresent() ? average.getAsDouble() : null;
     }
 
-    private Double averageLatency(List<EvalResult> results) {
-        OptionalDouble average = results.stream()
+    private List<Long> successfulLatencies(List<EvalResult> results) {
+        return results.stream()
                 .filter(result -> result.status() == EvalResultStatus.SUCCEEDED)
-                .mapToLong(EvalResult::latencyMs)
+                .map(EvalResult::latencyMs)
+                .toList();
+    }
+
+    private List<Long> latenciesWithJudge(List<EvalResult> results) {
+        return results.stream()
+                .filter(result -> result.status() == EvalResultStatus.SUCCEEDED)
+                .map(result -> result.latencyMs() + judgeLatency(result))
+                .toList();
+    }
+
+    private long judgeLatency(EvalResult result) {
+        if (result.id() == null) {
+            return 0L;
+        }
+        return repository.listJudgeDetails(result.id()).stream()
+                .mapToLong(EvalJudgeDetail::judgeLatencyMs)
+                .sum();
+    }
+
+    private Double averageLatency(List<Long> latencies) {
+        OptionalDouble average = latencies.stream()
+                .mapToLong(Long::longValue)
                 .average();
         return average.isPresent() ? average.getAsDouble() : null;
     }
 
-    private Double percentileLatency(List<EvalResult> results, double percentile) {
-        List<Long> latencies = new ArrayList<>(results.stream()
-                .filter(result -> result.status() == EvalResultStatus.SUCCEEDED)
-                .map(EvalResult::latencyMs)
-                .toList());
+    private Double percentileLatency(List<Long> source, double percentile) {
+        List<Long> latencies = new ArrayList<>(source);
         if (latencies.isEmpty()) {
             return null;
         }

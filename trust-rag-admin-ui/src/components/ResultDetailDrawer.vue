@@ -62,6 +62,7 @@ const judgeLabels: Record<string, string> = {
               </el-tag>
             </template>
             <p><strong>模型：</strong>{{ detail.model || '--' }}</p>
+            <p><strong>Judge 耗时：</strong>{{ formatDuration(detail.judgeLatencyMs) }}（重试 {{ detail.retryCount }} 次）</p>
             <p><strong>原因：</strong>{{ detail.reason || '--' }}</p>
             <details v-if="detail.prompt"><summary>Judge Prompt</summary><pre>{{ detail.prompt }}</pre></details>
             <details v-if="detail.rawOutput"><summary>Judge 原始输出</summary><pre>{{ detail.rawOutput }}</pre></details>
